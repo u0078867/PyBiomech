@@ -21,7 +21,7 @@ wantTipName = 'MyPoint'
 refSegment = 'femur'
 
 # Optional arguments
-filePathNewC3D = 'FMCC.c3d'
+filePathNewC3D = 'FMCC_tip.c3d'
 segSTLFilePath = 'femur.stl'
 verbose = False
 forceNoPauses = True

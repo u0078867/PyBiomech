@@ -12,7 +12,8 @@ setup(
     version='0.0.1.dev1',
     description='Collection of tools for certain biomechanical pipelines',
     long_description='Still in development, use with caution',
-    packages=find_packages(),
+    packages=find_packages('src'),
+    package_dir={'':'src'},
     install_requires=[
         'numpy',
         'scipy',
@@ -22,4 +23,6 @@ setup(
     include_package_data=True,
     license='MIT',
     author='u0078867',
+    author_email='davide.monari@kuleuven.be',
+    url='https://github.com/u0078867/PyBiomech',
 )
