@@ -1,4 +1,6 @@
 dist/*
 build/*
 temp/*
-scr/*.egg-info
+src/*.egg-info
+*.pyc
+setup.cfg
