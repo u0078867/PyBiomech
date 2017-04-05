@@ -6,6 +6,8 @@
 
 import numpy as np
 import fio, kine, kine_or, vtkh
+import re
+from itertools import groupby
 
 
 def expressOptoWandTipToMimicsRefFrame(
@@ -76,3 +78,16 @@ def expressOptoWandTipToMimicsRefFrame(
     
     return tipMimicsAvg
 
+
+
+def groupListBy(L, T, kf):
+    d = {}
+    things = [m.groups() for m in (re.search(T, l) for l in L) if m]
+    for key, group in groupby(things, kf):
+        d[key] = []
+        for thing in group:
+            d[key].append(thing)
+    return d
+            
+            
+            

@@ -1,26 +1,36 @@
 Installation for Anaconda
---------------
+-------------------------
 
 * Open a command shell
 * Type the following to install the first dependencies:
-  ```shell
-  conda install numpy scipy vtk
-  ```
+
+  .. code-block:: sh
+
+     conda install numpy scipy vtk
+
   Then choose "y".
 * Install the last dependency like this:
-  ```shell
-  easy_install btk
-  ```
+
+  .. code-block:: sh
+
+     easy_install btk
+
 * Proceed with the installation of *PyBiomech*:
-  ```shell
-  pip install PyBiomech --no-deps
-  ```
+
+  .. code-block:: sh
+
+     pip install PyBiomech --no-deps
+
 * To verify than everything went ok, type:
-  ```shell
-  python
-  ```
+
+  .. code-block:: sh
+
+     python
+
   and then import the library:
-  ```py
-  >>> import PyBiomech
-  ```
+
+  .. code-block:: python
+
+     >>> import PyBiomech
+
   If no error occurs, then you have correctly installed it!

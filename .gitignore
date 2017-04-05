@@ -4,3 +4,6 @@ temp/*
 src/*.egg-info
 *.pyc
 setup.cfg
+.pypirc
+upload.bat
+install.bat

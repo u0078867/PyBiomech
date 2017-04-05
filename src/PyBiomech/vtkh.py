@@ -5,6 +5,7 @@
 """
 
 import vtk
+import fio
 
 
 def reposeVTKData(vktDataIn, pose):
@@ -87,4 +88,36 @@ def createSphereVTKData(center, radius):
     source.SetCenter(*center)
     source.SetRadius(radius)
     return source
+    
+    
+    
+def showData(data):
+    # Create actors for each item
+    actors = []
+    for item in data:
+        
+        # Create actor
+        if item['type'] == 'point':
+            radius = 3
+            if 'radius' in item:
+                radius = item['radius']
+            d = createSphereVTKData(item['coords'], radius)
+            color = (1,0,0)
+            if 'color' in item:
+                color = item['color']
+            actor = createVTKActor(d, color=color)
+        if item['type'] == 'STL':
+            d = fio.readSTL(item['filePath'])
+            actor = createVTKActor(d)
+        opacity = 1
+        if 'opacity' in item:
+            opacity = item['opacity']
+        actor.GetProperty().SetOpacity(opacity)
+            
+        # Add actor
+        actors.append(actor)
+        
+    # Show actors
+    showVTKActors(actors)
+        
         

@@ -8,7 +8,7 @@ Created on Mon Apr 03 10:09:10 2017
 import sys
 import os
 
-modPath = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..')
+modPath = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../../../')
 sys.path.append(modPath)
 
 
