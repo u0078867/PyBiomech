@@ -34,7 +34,7 @@ def createVTKActor(vtkData, color=None):
         mapper.SetInput(source.GetOutput())
     actor = vtk.vtkActor()
     actor.SetMapper(mapper)
-    if color:
+    if color is not None:
         actor.GetProperty().SetColor(*color)
     return actor
     
@@ -106,6 +106,12 @@ def showData(data):
             if 'color' in item:
                 color = item['color']
             actor = createVTKActor(d, color=color)
+        if item['type'] == 'line':
+            color = (255,0,0)
+            if 'color' in item:
+                color = item['color']
+            d = createLineVTKData(item['coords'], color)
+            actor = createVTKActor(d)
         if item['type'] == 'STL':
             d = fio.readSTL(item['filePath'])
             actor = createVTKActor(d)

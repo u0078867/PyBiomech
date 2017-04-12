@@ -25,7 +25,8 @@ filePathMimics = 'Spec4_15L_GlobalCS_Landmarks.txt'
 refSegment = 'tibia'
 segSTLFilePath = 'Tibiaoriginal.stl'
 verbose = False
-forceNoPauses = True
+showNavigator = True
+forceNoPauses = True    # Set to True to process without interruption
 
 # Search C3D files
 filePaths = glob.glob(os.path.join(folderPath, '*.c3d'))
@@ -36,13 +37,14 @@ fileNames = [os.path.basename(fp) for fp in filePaths]
 template = '%s_%s_%s_%s'
 pattern = '(\w+)_(\w+)_(\w+)_(\w+)'
 groups = proc.groupListBy(fileNames, pattern, lambda x: x[:3])
-print(groups.keys())
 
+# Loop each group
 tips = {}
 for g in groups:
     
     tips[g] = np.zeros((0,3))
     
+    # Loop each file of the group
     for tokens in groups[g]:
     
         fileName = template % tokens
@@ -59,14 +61,16 @@ for g in groups:
         
         # Read Mimics file
         try:
-            tip = proc.expressOptoWandTipToMimicsRefFrame(
+            dummy, tip = proc.expressOptoWandTipToMimicsRefFrame(
                                                     filePathC3D, 
                                                     filePathMimics, 
                                                     wantTipName, 
                                                     refSegment,
                                                     filePathNewC3D = filePathNewC3D,
+                                                    reduceAs = 'avg_point',
                                                     segSTLFilePath = segSTLFilePath,
                                                     verbose = verbose,
+                                                    showNavigator = showNavigator,
                                                     forceNoPauses = forceNoPauses
                                                     )
                                                     
@@ -84,7 +88,7 @@ tips = [{
 } for t in tips]
 
 # Write tip coordinates to file
-with open('tips.txt', 'w') as f:
+with open('tips.txt', 'wb') as f:
     fieldNames = ['name', 'coords', 'std']
     writer = csv.DictWriter(f, fieldnames=fieldNames)
     writer.writeheader()
@@ -113,6 +117,7 @@ item['filePath'] = segSTLFilePath
 item['opacity'] = 0.5
 data.append(item)
 
+# Show actors
 vtkh.showData(data)
     
     

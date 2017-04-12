@@ -15,7 +15,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='PyBiomech',
-    version='0.0.4.dev1',
+    version='0.0.6.dev1',
     description='Collection of tools for certain biomechanical pipelines',
     #long_description='Still under development, use with caution!',
     long_description=open('README.rst').read(),
