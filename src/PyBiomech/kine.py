@@ -144,6 +144,9 @@ def rigidBodySVDFun(mkrs, mkrList, args):
     Nf = mkrs[mkrList[0]].shape[0]
     R = np.zeros((Nf, 3, 3))
     T = np.zeros((Nf, 3))
+    RMSE = np.zeros((Nf,))
+    eMax = np.zeros((Nf,))
+    eMaxMarker = Nf * [None]
     for i in xrange(0,Nf):
 
         # Create Nmarkers x 3 matrix for global coordinates
@@ -168,19 +171,26 @@ def rigidBodySVDFun(mkrs, mkrList, args):
             print('Only %d markers are visible for frame %d. Data will be set to nan' % (Nv, i))
 
         # Calculate RSME
-        RMSE = np.sqrt(np.sum(ei))
-        iMax = np.argmax(ei)
-        eMax = np.max(ei)
+        RMSEi = np.sqrt(np.sum(ei))
+        iMaxi = np.argmax(ei)
+        eMaxi = np.max(ei)
 
         if verbose:
-            print('RMSE for rigid pose estimation for frame %d: %.5f mm. Max distance for %s: %.5f mm' % (i, RMSE, mkrList[iMax], eMax))
-
-        # Insert into roto-translation matrix
+            print('RMSE for rigid pose estimation (%d markers) for frame %d: %.5f mm. Max distance for %s: %.5f mm' % (Nv, i, RMSEi, mkrList[iMaxi], eMaxi))
+        
+        # Insert data
         R[i,:,:] = Ri
         T[i,:] = Ti
+        RMSE[i] = RMSEi
+        eMax[i] = eMaxi
+        eMaxMarker[i] = mkrList[iMaxi]
 
     # Return data
-    return R, T
+    info = {}
+    info['RMSE'] = RMSE
+    info['eMax'] = eMax
+    info['eMaxMarker'] = eMaxMarker
+    return R, T, info
 
 
 def rigidBodyTransformation(x, y):
@@ -734,8 +744,7 @@ def nonCollinear5PointsStylusFun(P, args, verbose=True):
     
         # Perform SVD for triangle of markers P1-P3-P5
         print('Performing SVD with P1-P3-P5 ...')
-        #mkrNames1 = [nameP1, nameP3, nameP5]
-        mkrNames1 = [nameP1, nameP2, nameP3, nameP5]
+        mkrNames1 = [nameP1, nameP3, nameP5]
         R1, T1 = rigidBodySVDFun(P, mkrNames1, dataSVD)
         RT1 = composeRotoTranslMatrix(R1, T1)
         Pf1 = changeMarkersReferenceFrame(args['pos'], RT1)
@@ -759,6 +768,10 @@ def nonCollinear5PointsStylusFun(P, args, verbose=True):
         # Perform SVD with all visible points
         print('Performing SVD ...')
         R, T = rigidBodySVDFun(P, mkrNames, dataSVD)
+#        try:
+#            R, T = rigidBodySVDFun(P, ['Wand:WN','Wand:WE','Wand:WM','Wand:WS'], dataSVD)
+#        except:
+#            R, T = rigidBodySVDFun(P, ['WN','WE','WM','WS'], dataSVD)
         RT = composeRotoTranslMatrix(R, T)
         Pf = changeMarkersReferenceFrame(args['pos'], RT)
         
@@ -768,43 +781,53 @@ def nonCollinear5PointsStylusFun(P, args, verbose=True):
         P3 = Pf[nameP3]
         P4 = Pf[nameP4]
         P5 = Pf[nameP5]
+        
+    if args['algoTrilat'] == 0:
+        
+        tip = Pf['Tip']
+        
+    elif args['algoTrilat'] == 1:
                 
-    r = args['dist']
-    r1 = r[nameP1]
-    r2 = r[nameP2]
-    r3 = r[nameP3]
-    r4 = r[nameP4]
-    r5 = r[nameP5]
-
-    # Perform trilaterations
-    print('Performing trilaterations ...')
-    Nf = P1.shape[0]
-    u1 = np.zeros((Nf,3))
-    u2 = np.zeros((Nf,3))
-    v = np.zeros((Nf,3))
-    for i in xrange(Nf):
-        
-        # Perform trilateration with markers P1-P3-P5
-        _u1, _v1 = trilateration(np.array([P1[i,:], P3[i,:], P5[i,:]]), np.array([r1, r3, r5]))
-        u1[i,:] = _u1
-        
-        # Perform trilateration with markers P1-P3-P5
-        _u2, _v2 = trilateration(np.array([P2[i,:], P4[i,:], P5[i,:]]), np.array([r2, r4, r5]))
-        u2[i,:] = _u2
-        
-        # Find off-plane versor
-        cplane = getNormalToLSPlane(np.array((P1[i,:], P2[i,:], P3[i,:], P4[i,:], P5[i,:])))
-        _v = np.dot(np.cross(P3[i,:] - P2[i,:], P5[i,:] - P2[i,:]), cplane)
-        v[i,:] = np.sign(_v) * args['offPlaneDist'] * cplane
+        r = args['dist']
+        r1 = r[nameP1]
+        r2 = r[nameP2]
+        r3 = r[nameP3]
+        r4 = r[nameP4]
+        r5 = r[nameP5]
     
-    # Find the 2 tips
-    print('Reconstructing 2 tips ...')
-    tip1 = P1 + u1 + v
-    tip2 = P2 + u2 + v
-    
-    # Take the average of the two estimations for the tip position
-    print('Averaging 2 tips ...')
-    tip = .5 * (tip1 + tip2)
+        # Perform trilaterations
+        print('Performing trilaterations ...')
+        Nf = P1.shape[0]
+        u1 = np.zeros((Nf,3))
+        u2 = np.zeros((Nf,3))
+        v = np.zeros((Nf,3))
+        for i in xrange(Nf):
+            
+            # Perform trilateration with markers P1-P3-P5
+            _u1, _v1 = trilateration(np.array([P1[i,:], P3[i,:], P5[i,:]]), np.array([r1, r3, r5]))
+            #print np.linalg.norm(_v1)
+            u1[i,:] = _u1
+            
+            # Perform trilateration with markers P1-P3-P5
+            _u2, _v2 = trilateration(np.array([P2[i,:], P4[i,:], P5[i,:]]), np.array([r2, r4, r5]))
+            #print np.linalg.norm(_v2)
+            u2[i,:] = _u2
+            
+            # Find off-plane versor
+            cplane = getNormalToLSPlane(np.array((P1[i,:], P2[i,:], P3[i,:], P4[i,:], P5[i,:])))
+            _v = np.dot(np.cross(P3[i,:] - P2[i,:], P5[i,:] - P2[i,:]), cplane)
+            v[i,:] = np.sign(_v) * args['offPlaneDist'] * cplane
+        
+        # Find the 2 tips
+        print('Reconstructing 2 tips ...')
+#        tip1 = P1 + u1 + v
+#        tip2 = P2 + u2 + v
+        tip1 = P1 + u1 + _v1
+        tip2 = P2 + u2 + _v2
+        
+        # Take the average of the two estimations for the tip position
+        print('Averaging 2 tips ...')
+        tip = .5 * (tip1 + tip2)
     
     print('Tip calculated')
     return tip
@@ -1523,3 +1546,34 @@ def getJointTransl(R1, R2, O1, O2, T2translFun=None, **kwargs):
         Tvect = Tvect[None,:]
     transl = np.apply_along_axis(T2translFun, 1, Tvect, **kwargs)
     return transl
+    
+    
+def lineFitSVD(points):
+    # http://stackoverflow.com/questions/2298390/fitting-a-line-in-3d
+    # Calculate center and versor
+    centroid = points.mean(axis=0)
+    uu, dd, vv = np.linalg.svd(points - centroid)
+    versor = vv[0]
+    center = centroid
+    # Calculate other data
+    proj = np.dot(points - centroid, versor)
+    other = {}
+    other['proj'] = proj
+#    print (points - centroid)[:10,:]
+#    print np.linalg.norm(points - centroid, axis=1)[:10]
+#    print proj[:10]
+    return versor, center, other
+    
+    
+def planeFitSVD(points):
+    # http://stackoverflow.com/questions/15959411/fit-points-to-a-plane-algorithms-how-to-iterpret-results
+    # Calculate center and normal
+    centroid = points.mean(axis=0)
+    uu, dd, vv = np.linalg.svd(points - centroid)
+    versor = vv[2]
+    center = centroid
+    # Calculate other data
+    proj = points - (np.dot(points - centroid, versor))[:,np.newaxis] * versor
+    other = {}
+    other['proj'] = proj
+    return versor, center, other

@@ -1,0 +1,35 @@
+Legend
+======
+
+Sphere:
+Name:          Name of the sphere
+X1,Y1,Z1:      Coordinates of the center
+R:             Radius
+D:             Deviation
+
+Cylinder:
+Name:          Name of the cylinder
+X1,Y1,Z1:      Coordinates of the center of end 1
+X2,Y2,Z2:      Coordinates of the center of end 2
+DX,DY,DZ:      Coordinates of the direction
+R:             Radius
+H:             Height
+D:             Deviation
+MR:            Minimum Radius
+
+Data
+====
+
+Sphere:
+Name          	X1       	Y1       	Z1         	R      	D      	
+Marker Top    	-11.6192 	-55.9967 	-1730.3991 	6.3356 	0.0000 	
+Marker Right  	-53.2079 	-54.3819 	-1687.5598 	6.2983 	0.0000 	
+Marker Left   	 36.3206 	-50.4521 	-1678.2392 	6.3319 	0.0000 	
+Marker Mid    	 -8.2232 	-52.4010 	-1656.3130 	6.2824 	0.0000 	
+Marker Bottom 	 -5.4458 	-51.5086 	-1586.3156 	6.2948 	0.0000 	
+
+
+Cylinder:
+Name  	X1      	Y1       	Z1         	X2      	Y2       	Z2         	Dx     	Dy      	Dz      	R      	H      	D      	MR     	
+Tip   	-0.8278 	-42.4799 	-1451.0327 	-0.8278 	-42.4813 	-1454.2905 	0.0000 	-0.0004 	-1.0000 	0.7502 	3.2225 	0.0000 	0.0000 	
+

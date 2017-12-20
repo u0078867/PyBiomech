@@ -5,7 +5,9 @@
 """
 
 import numpy as np
-import fio, kine, kine_or, vtkh
+
+import fio, kine, kine_or, vtkh, ligaments as liga, contacts
+
 import re
 from itertools import groupby
 
@@ -15,6 +17,7 @@ def expressOptoWandTipToMimicsRefFrame(
                                         filePathMimics, 
                                         wandTipName, 
                                         refSegment,
+                                        wandParams = None,
                                         filePathNewC3D = None,
                                         reduceAs = 'avg_point',
                                         segSTLFilePath = None,
@@ -101,12 +104,16 @@ def expressOptoWandTipToMimicsRefFrame(
     # Read C3D
     print('==== Reading C3D file ...')
     markersOpto = fio.readC3D(filePathC3D, ['markers'], {
-        'removeSegmentNameFromMarkerNames': True
+        'setMarkersZeroValuesToNaN': True,
+        'removeSegmentNameFromMarkerNames': True,
     })['markers']
     
     # Calculate wand tip in Optoelectronic reference frame
     print('==== Reconstructing wand tip ...')
-    tipOpto = kine_or.getPointerTipOR(markersOpto, verbose=verbose)
+    if wandParams is None:
+        tipOpto = kine_or.getPointerTipOR(markersOpto, verbose=verbose)
+    else:
+        tipOpto = kine.nonCollinear5PointsStylusFun(markersOpto, wandParams, verbose=verbose)
     
     # Write to C3D
     if filePathNewC3D is not None:
@@ -123,6 +130,8 @@ def expressOptoWandTipToMimicsRefFrame(
         mkrList = ['mF1', 'mF2', 'mF3', 'mF4']
     elif refSegment == 'tibia':
         mkrList = ['mT1', 'mT2', 'mT3', 'mT4']
+    else:
+        mkrList = refSegment[:]
     args = {}
     args['mkrsLoc'] = markersMimics
     args['verbose'] = verbose
@@ -202,4 +211,545 @@ def groupListBy(L, T, kf):
     return d
             
             
+
+
+def calculateKneeSegmentsPoses(
+                            markersOpto,
+                            markersLoc,
+                            verbose = False
+                            ):
+    
+    # Calculate pose from Mimics reference frame to Optoelectronic reference frame
+    print('==== Calculating poses from Mimics reference frame to Optoelectronic reference frame ...')
+
+    args = {}
+    args['mkrsLoc'] = markersLoc
+    args['verbose'] = verbose
+    
+    mkrList = ["mF1", "mF2", "mF3", "mF4"]
+    R1, T1, info1 = kine.rigidBodySVDFun(markersOpto, mkrList, args)
+    RT1 = kine.composeRotoTranslMatrix(R1, T1)
+    
+    mkrList = ["mT1", "mT2", "mT3", "mT4"]
+    R2, T2, info2 = kine.rigidBodySVDFun(markersOpto, mkrList, args)
+    RT2 = kine.composeRotoTranslMatrix(R2, T2)
+    
+    results = {}
+    results['femur_pose'] = RT1
+    results['femur_pose_reconstruction_info'] = info1
+    results['tibia_pose'] = RT2
+    results['tibia_pose_reconstruction_info'] = info2
+    
+    return results
+    
+
+def calculateKneeKinematics(
+                            RT1,
+                            RT2,
+                            landmarksLoc,
+                            side
+                            ):
+                                
+    allALs = {}
+
+    # express FEMUR anatomical landmarks in lab reference frame
+    print('==== Expressing femur anatomical landmarks in Optoelectronic reference frame ...')
+    ALs = {m: np.array(landmarksLoc[m]) for m in ["FHC","FKC","FMCC","FLCC"]}
+    allALs.update(kine.changeMarkersReferenceFrame(ALs, RT1))
+
+    # calculate FEMUR anatomical reference frame
+    Ra1, Oa1 = kine_or.femurOR(allALs, s=side)
+
+    # express TIBIA anatomical landmarks in lab reference frame
+    print('==== Expressing tibia anatomical landmarks in Optoelectronic reference frame ...')
+    ALs = {m: np.array(landmarksLoc[m]) for m in ["TAC","TKC","TMCC","TLCC"]}
+    allALs.update(kine.changeMarkersReferenceFrame(ALs, RT2))
+
+    # calculate TIBIA anatomical reference frame
+    Ra2, Oa2 = kine_or.tibiaOR(allALs, s=side)
+
+    # calculate KNEE kinematics
+    print('==== Calculating knee kinematics ...')
+    angles = kine.getJointAngles(Ra1, Ra2, R2anglesFun=kine_or.gesOR, funInput='segmentsR', s=side)
+    transl = kine.getJointTransl(Ra1, Ra2, Oa1, Oa2, T2translFun=kine_or.gesTranslOR)
+    
+    results = {}
+    results["extension"] = angles[:,0]
+    results["adduction"] = angles[:,1]
+    results["intrarotation"] = angles[:,2]
+    results["ML"] = transl[:,0]
+    results["AP"] = transl[:,1]
+    results["IS"] = transl[:,2]
+    results["landmarks"] = allALs
+    
+    return results
+    
+    
+    
+
+
+def calculateKneeLigamentsData(
+                                RT1,
+                                RT2,
+                                insertionsLoc,
+                                frames = None,
+                                ligaNames = ['MCL', 'LCL'],
+                                tibiaPlateauMedEdgeSplineLoc = None,
+                                ligaModels = ['straight','Blankevoort_1991'],
+                                vtkFemur = None,
+                                vtkTibia = None,
+                                Marai2004Params = {},
+                                saveScene = False,
+                                sceneFormats = ['vtm'],
+                                outputDirSceneFile = None,
+                              ):
+                              
+    print('==== Creating spline for tibial medial edge plateau ...')
+    if tibiaPlateauMedEdgeSplineLoc is not None:
+        tibiaPlateauMedEdgeParamsSplineLoc = vtkh.createParamSpline(tibiaPlateauMedEdgeSplineLoc)
+    else:
+        tibiaPlateauMedEdgeParamsSplineLoc = None
+    
+    # initialize all insertion points dict
+    allPointsIns = {}
+
+    # Create dependency for ligaments
+    usedIns1 = []
+    usedIns2 = []
+    availableLigaNames = []
+    depsIns = {}
+    if "MCL" in ligaNames:
+        if "FMCL" in insertionsLoc and "TMCL" in insertionsLoc:
+            usedIns1.append("FMCL")
+            usedIns2.append("TMCL")
+            availableLigaNames.append("MCL")
+            depsIns['MCL'] = ['FMCL', 'TMCL']
+    if "LCL" in ligaNames:
+        if "FLCL" in insertionsLoc and "TLCL" in insertionsLoc:
+            usedIns1.append("FLCL")
+            usedIns2.append("TLCL")
+            availableLigaNames.append("LCL")
+            depsIns['LCL'] = ['FLCL', 'TLCL']
+
+    # express FEMUR insertion points in lab reference frame
+    print('==== Expressing femur ligament insertions in Optoelectronic reference frame ...')
+    pointsInsLoc = {m: np.array(insertionsLoc[m]) for m in usedIns1}
+    allPointsIns.update(kine.changeMarkersReferenceFrame(pointsInsLoc, RT1))
+
+    # express TIBIA insertion points in lab reference frame
+    print('==== Expressing tibia ligament insertions in Optoelectronic reference frame ...')
+    pointsInsLoc = {m: np.array(insertionsLoc[m]) for m in usedIns2}
+    allPointsIns.update(kine.changeMarkersReferenceFrame(pointsInsLoc, RT2))
+    
+    # calculate liga paths and lengths
+    print('==== Calculating knee ligaments data ...')
+    ligaPaths = {}
+    ligaLengths = {}
+    
+    Nf = RT1.shape[0]
+
+    iRange = range(Nf)
+    if frames is not None:
+        iRange = frames
+    
+    for i in iRange:
+        
+        print('==== ---- Processing time frame %d' % (i))
+        
+        if saveScene:
+        
+            if vtkFemur is not None and vtkTibia is not None:
             
+                vtkFemur2 = vtkh.reposeVTKData(vtkFemur, RT1[i,...])
+                vtkTibia2 = vtkh.reposeVTKData(vtkTibia, RT2[i,...])
+        
+            else:
+                
+                raise Exception('"saveScene = True" option requires input "vtkFemur", "vtkTibia"')
+    
+        for ligaName in availableLigaNames:
+            
+            if ligaName not in ligaPaths:
+                ligaPaths[ligaName] = {}
+                
+            if ligaName not in ligaLengths:
+                ligaLengths[ligaName] = {}
+            
+            insNames = depsIns[ligaName]
+            
+            pIns2 = np.array((allPointsIns[insNames[0]][i,:], allPointsIns[insNames[1]][i,:]))
+            
+            if 'straight' in ligaModels:
+                
+                if 'straight' not in ligaPaths[ligaName]:
+                    ligaPaths[ligaName]['straight'] = Nf * [[]]
+                    
+                if 'straight' not in ligaLengths[ligaName]:
+                    ligaLengths[ligaName]['straight'] = Nf * [np.nan]
+    
+                # calculate path
+                ligaPathA = pIns2.copy()
+                
+                ligaLengthA = liga.calcLigaLength(ligaPathA)
+                
+                ligaPaths[ligaName]['straight'][i] = ligaPathA
+                
+                ligaLengths[ligaName]['straight'][i] = ligaLengthA
+            
+            if 'Blankevoort_1991' in ligaModels:
+                
+                if 'Blankevoort_1991' not in ligaPaths[ligaName]:
+                    ligaPaths[ligaName]['Blankevoort_1991'] = Nf * [[]]
+                    
+                if 'Blankevoort_1991' not in ligaLengths[ligaName]:
+                    ligaLengths[ligaName]['Blankevoort_1991'] = Nf * [np.nan]
+    
+                if tibiaPlateauMedEdgeParamsSplineLoc is not None:
+        
+                    # repose spline
+                    tibiaPlateauMedEdgeParamsSpline = vtkh.reposeSpline(tibiaPlateauMedEdgeParamsSplineLoc, RT2[i,...])
+        
+                    # 2-lines model with shortest possible path if touching tibial edge
+                    dummy, ligaPathB = liga.ligamentPathBlankevoort1991(pIns2, tibiaPlateauMedEdgeParamsSpline)
+                    
+                    # Calculate length
+                    ligaLengthB = liga.calcLigaLength(ligaPathB)
+                    
+                    ligaPaths[ligaName]['Blankevoort_1991'][i] = ligaPathB
+                
+                    ligaLengths[ligaName]['Blankevoort_1991'][i] = ligaLengthB
+                    
+                else:
+                    
+                    raise Exception('"Blankevoort_1991" methods requires input "tibiaPlateauMedEdgeSplineLoc"')
+                    
+            if 'Marai_2004' in ligaModels:
+                
+                if 'Marai_2004' not in ligaPaths[ligaName]:
+                    ligaPaths[ligaName]['Marai_2004'] = Nf * [[]]
+                    
+                if 'Marai_2004' not in ligaLengths[ligaName]:
+                    ligaLengths[ligaName]['Marai_2004'] = Nf * [np.nan]
+                
+                if vtkFemur is not None and vtkTibia is not None and Marai2004Params is not None:
+                    
+                    vtkFemur2 = vtkh.reposeVTKData(vtkFemur, RT1[i,...])
+                    
+                    vtkTibia2 = vtkh.reposeVTKData(vtkTibia, RT2[i,...])
+                    
+                    pars = Marai2004Params
+                    
+                    dummy, ligaPathC = liga.ligamentPathMarai2004(pIns2, vtkFemur2, vtkTibia2, **pars)
+                    
+                    # Calculate length
+                    ligaLengthC = liga.calcLigaLength(ligaPathC)
+                    
+                    ligaPaths[ligaName]['Marai_2004'][i] = ligaPathC
+                
+                    ligaLengths[ligaName]['Marai_2004'][i] = ligaLengthC
+                    
+                else:
+                    
+                    raise Exception('"Marai_2004" methods requires input "vtkFemur", "vtkTibia"')
+                    
+        if saveScene:
+            
+            actors = []
+            names = []
+            
+            actors.append(vtkh.createVTKActor(vtkFemur2))
+            names.append('femur')
+            
+            actors.append(vtkh.createVTKActor(vtkTibia2))
+            names.append('tibia')
+            
+            if tibiaPlateauMedEdgeParamsSplineLoc is not None:
+            
+                tibiaPlateauMedEdgePoints = vtkh.evalSpline(tibiaPlateauMedEdgeParamsSpline, np.arange(0, 1.01, 0.01))
+                
+                vtkTibiaPlateauMedEdgeLine = vtkh.createLineVTKData(tibiaPlateauMedEdgePoints, [255, 0, 0])
+                
+                actors.append(vtkh.createVTKActor(vtkTibiaPlateauMedEdgeLine))
+                names.append('tibia_medial_plateau')
+            
+            for ligaName in ligaPaths:
+                
+                for model in ligaPaths[ligaName]:
+                    
+                    vtkLigaLine = vtkh.createLineVTKData(ligaPaths[ligaName][model][i], [255, 0, 0])
+            
+                    actors.append(vtkh.createVTKActor(vtkLigaLine))
+                    names.append(ligaName + '_model_' + model)
+            
+            scene = vtkh.createScene(actors)
+            
+            for fmt in sceneFormats:
+                vtkh.exportScene(scene, outputDirSceneFile + ('/ligaments_tf_%05d' % i), ext=fmt, names=names)
+
+    
+    # store results
+    results = {}
+    results["paths"] = ligaPaths
+    results["lengths"] = ligaLengths
+    return results
+
+
+
+
+
+def calculateKneeContactsData(
+                                RT1,
+                                RT2,
+                                vtkFemur,
+                                vtkTibia,
+                                frames = None,
+                                femurDecimation = None,
+                                tibiaDecimation = None,
+                                saveScene = False,
+                                sceneFormats = ['vtm'],
+                                outputDirSceneFile = None,
+                              ):
+
+    if femurDecimation is not None:
+        
+        vtkFemur_ = vtkh.decimateVTKData(vtkFemur, femurDecimation)
+        
+    else:
+        
+        vtkFemur_ = vtkFemur
+        
+        
+    if tibiaDecimation is not None:
+        
+        vtkTibia_ = vtkh.decimateVTKData(vtkTibia, tibiaDecimation)
+        
+    else:
+        
+        vtkTibia_ = vtkTibia
+
+    print('==== Calculating knee contact data ...')
+
+    Nf = RT1.shape[0]
+    
+    contactData = {}
+    contactData['femur'] = {}
+    contactData['femur']['points'] = Nf * [[]]
+    contactData['femur']['distances'] = Nf * [[]]
+    contactData['tibia'] = {}
+    contactData['tibia']['points'] = Nf * [[]]
+    contactData['tibia']['distances'] = Nf * [[]]
+    
+    iRange = range(Nf)
+    if frames is not None:
+        iRange = frames
+    
+    for i in iRange:
+    
+        print('==== ---- Processing time frame %d' % (i))
+
+        vtkFemur2 = vtkh.reposeVTKData(vtkFemur_, RT1[i,...])
+                    
+        vtkTibia2 = vtkh.reposeVTKData(vtkTibia_, RT2[i,...])
+        
+        vtkFemur2Sliced, vtkTibia2Sliced = contacts.calculateBonesContactAnalysisROIonScaledBB(vtkFemur2, vtkTibia2, 3*[1.2], 3*[1.2])
+        
+        vtkFemurDistance, vtkTibiaDistance = contacts.calculateBonesContactData(vtkFemur2Sliced, vtkTibia2Sliced)
+        
+        if saveScene:
+            
+            names = []
+            
+            vtkFemurActor = vtkh.createVTKActor(vtkFemur2)
+            names.append('femur')
+            
+            vtkTibiaActor = vtkh.createVTKActor(vtkTibia2)
+            names.append('tibia')
+            
+            vtkFemurDistanceActor = vtkh.createVTKActor(vtkFemurDistance, scalarRange=vtkFemurDistance.GetScalarRange())
+            names.append('femur_distance_field')
+        
+            vtkTibiaDistanceActor = vtkh.createVTKActor(vtkTibiaDistance, scalarRange=vtkTibiaDistance.GetScalarRange())
+            names.append('tibia_distance_field')
+            
+            vtkFemurDistanceContour = vtkh.createContourVTKData(vtkFemurDistance, 20)
+            
+            vtkTibiaDistanceContour = vtkh.createContourVTKData(vtkTibiaDistance, 20)
+            
+            vtkFemurDistanceContourActor = vtkh.createVTKActor(vtkFemurDistanceContour, 
+                                                               presets='contour', 
+                                                               color=(0.2, 0.2, 0.2),
+                                                               lineWidth=2, 
+                                                               scalarRange=vtkFemurDistance.GetScalarRange()
+                                                              )
+            names.append('femur_distance_field_isolines')
+                                                              
+            vtkTibiaDistanceContourActor = vtkh.createVTKActor(vtkTibiaDistanceContour, 
+                                                               presets='contour', 
+                                                               color=(0.2, 0.2, 0.2),
+                                                               lineWidth=2, 
+                                                               scalarRange=vtkTibiaDistance.GetScalarRange()
+                                                              )
+            names.append('tibia_distance_field_isolines')
+            
+            scene = vtkh.createScene([
+                vtkFemurActor,
+                vtkTibiaActor,
+                vtkFemurDistanceActor,
+                vtkTibiaDistanceActor,
+                vtkFemurDistanceContourActor,
+                vtkTibiaDistanceContourActor
+            ])
+            #vtkh.showScene(scene)
+            
+            for fmt in sceneFormats:
+                vtkh.exportScene(scene, outputDirSceneFile + ('/contact_tf_%05d' % i), ext=fmt, names=names)
+        
+        points, distances = vtkh.VTKScalarData2Numpy(vtkFemurDistance)
+        contactData['femur']['points'][i] = points
+        contactData['femur']['distances'][i] = distances
+        
+        points, distances = vtkh.VTKScalarData2Numpy(vtkTibiaDistance)
+        contactData['tibia']['points'][i] = points
+        contactData['tibia']['distances'][i] = distances
+        
+        
+    # store results
+    results = contactData
+    return results
+    
+    
+    
+    
+def assembleKneeDataGranular(
+                                markers=None, 
+                                poses=None, 
+                                kine=None, 
+                                liga=None, 
+                                contact=None
+                            ):
+                                
+    print('==== Assemblying knee data ...')
+    
+    Nf = poses['femur_pose'].shape[0]
+    
+    data = Nf * [None]
+    
+    for i in xrange(Nf):
+        
+        row = []
+        
+        # Assemble markers
+        
+        if markers is not None:
+        
+            for m in markers:
+                
+                item = {
+                    "description": ("%s global position (mm)" % m),
+                    "value": markers[m][i,:],
+                    "ID": m,
+                    "type": "point",
+                    "by": "C3D reader"
+                }
+                row.append(item)
+                
+        if kine is not None:
+            
+            for m in kine["landmarks"]:
+                
+                item = {
+                    "description": ("%s global position (mm)" % m),
+                    "value": kine["landmarks"][m][i,:],
+                    "ID": m,
+                    "type": "point",
+                    "by": "KneeKine"
+                }
+                row.append(item)
+            
+        # Assemble poses
+            
+        if poses is not None:
+            
+            item = {
+                "description": "Pose from femur technical to lab reference frame",
+                "value": poses['femur_pose'][i,...].squeeze(),
+                "ID": 'femurPose',
+                "type": "pose",
+                "by": "KneeKine"
+            }
+            row.append(item)
+            
+            item = {
+                "description": "Pose from tibia technical to lab reference frame",
+                "value": poses['tibia_pose'][i,...].squeeze(),
+                "ID": 'tibiaPose',
+                "type": "pose",
+                "by": "KneeKine"
+            }
+            row.append(item)
+        
+        # Assemble ligament data
+        
+        if liga is not None:
+        
+            for ligaName in liga['paths']:
+                
+                for ligaModel in liga['paths'][ligaName]:
+                    
+                    item = {
+                        "description+": ("%s global path position (mm)" % ligaName),
+                        "value": liga['paths'][ligaName][ligaModel][i],
+                        "ID": ('%sPath_%s' % (ligaName, ligaModel)),
+                        "type": "path",
+                        "by": "LigaPath"
+                    }
+                    row.append(item)                
+                
+                
+        
+        data[i] = row
+            
+            
+    return data
+        
+        
+        
+def assembleKneeDataAsIsNoMetadata(
+                                    markers=None, 
+                                    poses=None, 
+                                    kine=None, 
+                                    liga=None, 
+                                    contact=None
+                                  ):
+                                      
+    print('==== Assemblying knee data ...')
+    
+    data = {}
+    
+    if markers is not None:
+    
+        data['markers'] = markers
+        
+        if kine is not None:
+            
+            data['markers'].update(kine['landmarks'])
+            
+    if poses is not None:
+    
+        data['poses'] = poses
+        
+    if kine is not None:
+    
+        data['kine'] = kine
+
+    if liga is not None:
+    
+        data['liga'] = liga
+        
+    if contact is not None:
+    
+        data['contact'] = contact
+    
+    return data
+    
+    

@@ -211,23 +211,38 @@ def getPointerTipOR(mkrs, **kwargs):
     wand = {}
     wand['markers'] = ['WN', 'WW', 'WE', 'WM', 'WS']
     wand['pos'] = {
-        'WN': np.array([142.65, 138.57, 306.57]),
-        'WW': np.array([96.34, 136.36, 257.37]),
-        'WE': np.array([184.39, 138, 263.2]),
-        'WM': np.array([139.26, 136.25, 231.84]),
-        'WS': np.array([135.94, 134.16, 161.84]),
+        'WN': np.array([-11.6192, -55.9967, -1730.3991]),
+        'WW': np.array([36.3206, -50.4521, -1678.2392]),
+        'WE': np.array([-53.2079, -54.3819, -1687.5598]),
+        'WM': np.array([-8.2232, -52.401, -1656.313]),
+        'WS': np.array([-5.4458, -51.5086, -1586.3156]),
+        'Tip': np.array([-0.8278, -42.4799, -1451.0327]),
     }
     wand['dist'] = {
-        'WN': 281.3412,
-        'WW': 234.1736,
-        'WE': 243.98,
-        'WM': 206.5779,
-        'WS': 136.6144,
+        'WN': 279.901310546,
+        'WW': 230.361353611,
+        'WE': 242.549791825,
+        'WM': 205.652915696,
+        'WS': 135.662472261,
     }
-    wand['offPlaneDist'] = 10.5
+    wand['offPlaneDist'] = 4.7
     wand['algoSVD'] = 2
+    wand['algoTrilat'] = 0
     tip = nonCollinear5PointsStylusFun(mkrs, wand, **kwargs)
     return tip
+    
+
+
+def get3StrainGagesSensorModel():
+    sensor = {}
+    sensor['pos'] = {}
+    sensor['pos']['gage1_top'] = np.array([2.7051, 4.2051, 0.0])
+    sensor['pos']['gage1_bottom'] = np.array([-4.2051, -2.7051, 0.0])
+    sensor['pos']['gage2_top'] = np.array([-2.7051, 4.2051, 0.0])
+    sensor['pos']['gage2_bottom'] = np.array([4.2051, -2.7051, 0.0])
+    sensor['pos']['gage3_top'] = np.array([0.0, 5.0, 0.0])
+    sensor['pos']['gage3_bottom'] = np.array([0.0, -5.0, 0.0])
+    return sensor
 
 
 

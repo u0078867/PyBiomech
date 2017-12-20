@@ -6,57 +6,16 @@ Created on Fri Jan 06 10:35:47 2017
 """
 
 import vtk
-from vtk.util.numpy_support import vtk_to_numpy as v2n
-from vtk_wrap import *
+from vtkh import *
 import numpy as np
 from scipy.optimize import minimize as spminimize
-from scipy import interpolate
 from scipy.interpolate import RegularGridInterpolator
-    
-    
 
-def arePointsPenetrating(vtkData, vtkPoints):
-    pointChecker = vtk.vtkSelectEnclosedPoints()
-    pointChecker.SetInput(vtkPoints)
-    pointChecker.SetSurface(vtkData)
-    pointChecker.SetCheckSurface(1)
-    pointChecker.SetTolerance(0)
-    pointChecker.Update()
-    insideArr = v2n(pointChecker.GetOutput().GetPointData().GetArray('SelectedPoints'))
-    penetration = (insideArr.sum() > 0)
-    return penetration
+  
     
-    
-    
-def createParamSpline(pts):
-    p = np.array(pts)
-    x, y, z = p.T.tolist()
-    tck, u = interpolate.splprep([x, y, z], s=0)
-    spline = tck
-    return spline
-    
-
-
-def reposeSpline(spline, pose):
-    tck = spline
-    Np = tck[1][0].shape[0]
-    pc = np.array(tck[1] + [Np*[1]])
-    pcr = np.dot(pose, pc)
-    t2 = tck[0][:]
-    c2 = (pcr[0,:], pcr[1,:], pcr[2,:])
-    k2 = tck[2]
-    tck2 = [t2, c2, k2]
-    spline2 = tck2
-    return spline2
-    
-
-
-def evalSpline(spline, u):
-    tck = spline
-    out = interpolate.splev(u, tck)
-    p = np.array(out).T
-    return p
-    
+def calcLigaLength(ligaPath) :
+    L = np.linalg.norm(np.diff(ligaPath, axis=0), axis=1).sum()
+    return L
     
     
 def ligamentPathBlankevoort1991(pIns, edgeSpline):
@@ -81,14 +40,14 @@ def ligamentPathBlankevoort1991(pIns, edgeSpline):
     if np.dot(p1 - pem, pup) < 0:
         pe1, pe2 = pe2, pe1
     if np.dot(np.cross(p1 - pem, p2 - pem), pe2 - pe1) < 0:
-        print('straight line not penetrating')
+        #print('straight line not penetrating')
         pl = np.array((p1,p2))
         
     return pe, pl
-  
     
     
-def ligamentPathMarai2004(pIns, vtkFemur, vtkTibia, Ns, iterInitP, iterArgs={}, equalizeInitIterP=True):
+    
+def ligamentPathMarai2004(pIns, vtkBoneA, vtkBoneB, Ns=10, iterInitP=[], iterArgs={}, equalizeInitIterP=True):
     # Unpack insertion points
     p1 = pIns[0,:]
     p2 = pIns[1,:]
@@ -104,8 +63,8 @@ def ligamentPathMarai2004(pIns, vtkFemur, vtkTibia, Ns, iterInitP, iterArgs={}, 
     Rt = np.vstack((np.hstack((R, p2[:,None])), (0, 0, 0, 1)))
     
     # Repose all elements in new reference frame
-    vtkFemur2 = reposeVTKData(vtkFemur, Rt.ravel())
-    vtkTibia2 = reposeVTKData(vtkTibia, Rt.ravel())
+    vtkBoneA2 = reposeVTKData(vtkBoneA, Rt.ravel())
+    vtkBoneB2 = reposeVTKData(vtkBoneB, Rt.ravel())
     p12 = np.dot(Rt, np.append(p1, 1))[:3]
     p22 = np.dot(Rt, np.append(p2, 1))[:3]
     if Ns is None:
@@ -149,8 +108,8 @@ def ligamentPathMarai2004(pIns, vtkFemur, vtkTibia, Ns, iterInitP, iterArgs={}, 
     checkPoints.SetPoints(points)
     
     # Create points checker
-    penetration = arePointsPenetrating(vtkFemur2, checkPoints) or \
-                    arePointsPenetrating(vtkTibia2, checkPoints)
+    penetration = arePointsPenetrating(vtkBoneA2, checkPoints) or \
+                    arePointsPenetrating(vtkBoneB2, checkPoints)
     print('Penetration: %d' % penetration)
                     
     if penetration:
@@ -183,17 +142,18 @@ def ligamentPathMarai2004(pIns, vtkFemur, vtkTibia, Ns, iterInitP, iterArgs={}, 
         
         def consFun(x, ip, bone):
             pp = retablePoints(x)
-            if bone == 'tibia':
-                pointDistancer.SetInput(vtkTibia2)
-            elif bone == 'femur':
-                pointDistancer.SetInput(vtkFemur2)
+            if bone == 'boneB':
+                vtkBone = vtkBoneB2
+            elif bone == 'boneA':
+                vtkBone = vtkBoneA2
+            pointDistancer.SetInput(vtkBone)
             d = pointDistancer.EvaluateFunction(pp[ip,:])
             return d
             
         cons = []
         for ip in xrange(1, Ns):
-            cons.append({'type': 'ineq', 'fun': consFun, 'args': (ip, 'tibia')})
-            cons.append({'type': 'ineq', 'fun': consFun, 'args': (ip, 'femur')})
+            cons.append({'type': 'ineq', 'fun': consFun, 'args': (ip, 'boneB')})
+            cons.append({'type': 'ineq', 'fun': consFun, 'args': (ip, 'boneA')})
             
         def jac2C(x):
             pp = retablePoints(x)
@@ -253,7 +213,7 @@ def ligamentPathMarai2004(pIns, vtkFemur, vtkTibia, Ns, iterInitP, iterArgs={}, 
         
     
 
-def estimateLigamentPath(
+def estimateKneeLigamentPath(
                         pIns,
                         method='blankevoort_1991',
                         vtkFemur=None,
@@ -303,6 +263,17 @@ def estimateLigamentPath(
     
     # Return ligament path
     return pWrap
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     
     
     

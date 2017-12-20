@@ -42,5 +42,5 @@ Update
 * Open a command shell
 * Type the following to update *PyBiomech*:
   ```shell
-  pip install PyBiomech --no-deps
+  pip install PyBiomech --upgrade --no-deps
   ```
