@@ -1,0 +1,19 @@
+Legend
+======
+
+Spline:
+Name:          Name of the spline
+Xp,Yp,Zp:      Coordinates of point P on spline
+
+Data
+====
+
+Spline:
+Name: TibiaPlateauMedEdge
+X0 Y0 Z0: 18.59  -136.96 228.00
+X1 Y1 Z1: 31.18  -132.54 228.00
+X2 Y2 Z2: 38.81  -124.67 228.00
+X3 Y3 Z3: 41.63  -119.15 228.00
+X4 Y4 Z4: 44.25  -105.07 228.00
+X5 Y5 Z5: 37.98  -90.91 227.34
+X6 Y6 Z6: 20.93  -87.34 228.00

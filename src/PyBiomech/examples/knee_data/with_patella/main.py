@@ -20,44 +20,19 @@ from PyBiomech import fio
 
 
 # Set arguments
-filePathC3D = './Native - PassiveFlexion Trial 1.c3d'
-
-#paramsReadingMethod = 'from_params.json'
-paramsReadingMethod = 'from_mimics'
-filePathORParams = './params.json'
-filePathMarkersLoc = './landmarks.mimics.txt'
-filePathSplinesLoc = './splines.mimics.txt'
-
-tibiaPlateauMedEdgeLineName = 'TibiaPlateauMedEdge'
-
+filePathC3D = './Spec11_16_R_Native_Squat 1.c3d'
+filePathMarkersLoc = './Spec11_GlobalCS_Landmarks.txt'
 filePathSTLFemur = './femur.stl'
 filePathSTLTibia = './tibia.stl'
-
+filePathSTLPatella = './patella.stl'
 folderPosesSceneFiles = './poses_scenes'
 folderContactSceneFiles = './contact_scenes'
 folderLigamentsSceneFiles = './ligaments_scenes'
-
 assembleDataMethod = 2
 
-
-
-
-if paramsReadingMethod == 'from_params.json':
-
-    # Read params JSON file and adjust a few structures for later
-    params = fio.readORParamsFile(filePathORParams)
-    markersLoc = {m: params['mkrsLoc'][m]['pos'] for m in params['mkrsLoc']}
-    linesLoc = {m: params['splines'][m]['pos'] for m in params['splines']}
-    side = params['side']
-
-elif paramsReadingMethod == 'from_mimics':
-    
-    # Read Mimics files and adjust a few structures for later
-    params = fio.readMimics(filePathMarkersLoc, ['markers'])
-    markersLoc = {m: params['markers'][m] for m in params['markers']}
-    params = fio.readSplinesMimics(filePathSplinesLoc)
-    linesLoc = {m: params['splines'][m] for m in params['splines']}
-    side = 'R'
+# Read Mimics files and adjust a few structures for later
+params = fio.readMimics(filePathMarkersLoc, ['markers'])
+markersLoc = {m: params['markers'][m] for m in params['markers']}
 
 # Read C3D file
 print('==== Reading C3D file ...')
@@ -69,14 +44,16 @@ markers = fio.readC3D(filePathC3D, ['markers'], {
 # Calculate knee segments poses
 vtkFemur = fio.readSTL(filePathSTLFemur)
 vtkTibia = fio.readSTL(filePathSTLTibia)
+vtkPatella = fio.readSTL(filePathSTLPatella)
 poses = proc.calculateKneeSegmentsPoses(
                                         markers,
                                         markersLoc,
-                                        verbose = False,
+                                        verbose = True,
                                         saveScene = True,
-                                        sceneFrames = range(200, 400),
+                                        sceneFrames = range(800, 1800),
                                         vtkFemur = vtkFemur,
                                         vtkTibia = vtkTibia,
+                                        vtkPatella = vtkPatella,
                                         sceneFormats = ['vtm'],
                                         outputDirSceneFile = folderPosesSceneFiles,
                                        )
@@ -84,6 +61,7 @@ poses = proc.calculateKneeSegmentsPoses(
 # Calculate knee kinematics data
 RT1 = poses['femur_pose']
 RT2 = poses['tibia_pose']
+side = 'R'
 kine = proc.calculateKneeKinematics(
                                     RT1,
                                     RT2,
@@ -92,16 +70,16 @@ kine = proc.calculateKneeKinematics(
                                    )
                                    
 # Calculate knee ligaments data
-tibiaPlateauMedEdgeLine = linesLoc[tibiaPlateauMedEdgeLineName]
+tibiaPlateauMedEdgeLine = None
 liga = proc.calculateKneeLigamentsData(
                                         RT1,
                                         RT2,
                                         markersLoc,
-                                        frames = range(200, 400),
+                                        frames = [300],
                                         ligaNames = ['MCL'],
                                         tibiaPlateauMedEdgeSplineLoc = tibiaPlateauMedEdgeLine,
-                                        ligaModels = ['straight','Blankevoort_1991', 'Marai_2004'],
-#                                        ligaModels = ['straight','Blankevoort_1991'],
+#                                        ligaModels = ['straight', 'Marai_2004'],
+                                        ligaModels = ['straight'],
                                         vtkFemur = vtkFemur,
                                         vtkTibia = vtkTibia,
                                         Marai2004Params = {'Ns': 10, 'iterArgs': {'disp': True, 'eps' : 50e0, 'maxiter': 100}},
@@ -116,7 +94,7 @@ contact = proc.calculateKneeContactsData(
                                             RT2,
                                             vtkFemur,
                                             vtkTibia,
-                                            frames = range(200, 400),
+                                            frames = [300],
                                             femurDecimation = 0.4,
                                             tibiaDecimation = 0.4,
                                             saveScene = True,
@@ -145,7 +123,7 @@ elif assembleDataMethod == 2:
                                         
 # Save data for file
 print('==== Saving knee data ...')
-fio.writeMATFile('Native - PassiveFlexion Trial 1.mat', kneeData)
+fio.writeMATFile('Spec11_16_R_Native_Squat 1.mat', kneeData)
 
 
 print('==== Finished!')

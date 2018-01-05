@@ -216,7 +216,14 @@ def groupListBy(L, T, kf):
 def calculateKneeSegmentsPoses(
                             markersOpto,
                             markersLoc,
-                            verbose = False
+                            verbose = False,
+                            vtkFemur = None,
+                            vtkTibia = None,
+                            vtkPatella = None,
+                            saveScene = False,
+                            sceneFrames = None,
+                            sceneFormats = ['vtm'],
+                            outputDirSceneFile = None,
                             ):
     
     # Calculate pose from Mimics reference frame to Optoelectronic reference frame
@@ -226,19 +233,101 @@ def calculateKneeSegmentsPoses(
     args['mkrsLoc'] = markersLoc
     args['verbose'] = verbose
     
+    femurAvailable = False
     mkrList = ["mF1", "mF2", "mF3", "mF4"]
-    R1, T1, info1 = kine.rigidBodySVDFun(markersOpto, mkrList, args)
-    RT1 = kine.composeRotoTranslMatrix(R1, T1)
+    if set(mkrList) <= set(markersLoc.keys()):
+        femurAvailable = True
+        print('==== ---- Femur markers found')
+        R1, T1, info1 = kine.rigidBodySVDFun(markersOpto, mkrList, args)
+        RT1 = kine.composeRotoTranslMatrix(R1, T1)
     
+    tibiaAvailable = False
     mkrList = ["mT1", "mT2", "mT3", "mT4"]
-    R2, T2, info2 = kine.rigidBodySVDFun(markersOpto, mkrList, args)
-    RT2 = kine.composeRotoTranslMatrix(R2, T2)
+    if set(mkrList) <= set(markersLoc.keys()):
+        tibiaAvailable = True
+        print('==== ---- Tibia markers found')
+        R2, T2, info2 = kine.rigidBodySVDFun(markersOpto, mkrList, args)
+        RT2 = kine.composeRotoTranslMatrix(R2, T2)
+    
+    patellaAvailable = False
+    mkrList = ["mP1", "mP2", "mP3", "mP4"]
+    if set(mkrList) <= set(markersLoc.keys()):
+        patellaAvailable = True
+        print('==== ---- Patella markers found')
+        R3, T3, info3 = kine.rigidBodySVDFun(markersOpto, mkrList, args)
+        RT3 = kine.composeRotoTranslMatrix(R3, T3)
     
     results = {}
-    results['femur_pose'] = RT1
-    results['femur_pose_reconstruction_info'] = info1
-    results['tibia_pose'] = RT2
-    results['tibia_pose_reconstruction_info'] = info2
+    if femurAvailable:
+        results['femur_pose'] = RT1
+        results['femur_pose_reconstruction_info'] = info1
+    if tibiaAvailable:
+        results['tibia_pose'] = RT2
+        results['tibia_pose_reconstruction_info'] = info2
+    if patellaAvailable:
+        results['patella_pose'] = RT3
+        results['patella_pose_reconstruction_info'] = info3
+    
+    Nf = RT1.shape[0]
+
+    iRange = range(Nf)
+    if sceneFrames is not None:
+        iRange = sceneFrames
+        
+    if saveScene and vtkFemur is not None and not femurAvailable:
+        
+        raise Exception('"saveScene = True" option requires femur data to be available if input "vtkFemur" is provided')
+    
+    if saveScene and vtkTibia is not None and not tibiaAvailable:
+        
+        raise Exception('"saveScene = True" option requires tibia data to be available if input "vtkTibia" is provided')
+        
+    if saveScene and vtkPatella is not None and not patellaAvailable:
+        
+        raise Exception('"saveScene = True" option requires patella data to be available if input "vtkPatella" is provided')
+    
+    for i in iRange:
+        
+        if saveScene:
+        
+            print('==== ---- Saving scene for time frame %d' % (i))
+        
+            if vtkFemur is not None:
+            
+                vtkFemur2 = vtkh.reposeVTKData(vtkFemur, RT1[i,...])
+                
+            if vtkTibia is not None:
+                
+                vtkTibia2 = vtkh.reposeVTKData(vtkTibia, RT2[i,...])
+                
+            if vtkPatella is not None:
+            
+                vtkPatella2 = vtkh.reposeVTKData(vtkPatella, RT3[i,...])
+        
+                
+            actors = []
+            names = []
+            
+            if vtkFemur is not None:
+            
+                actors.append(vtkh.createVTKActor(vtkFemur2))
+                names.append('femur')
+                
+            if vtkTibia is not None:
+            
+                actors.append(vtkh.createVTKActor(vtkTibia2))
+                names.append('tibia')
+                
+            if vtkPatella is not None:
+            
+                actors.append(vtkh.createVTKActor(vtkPatella2))
+                names.append('patella')
+            
+            scene = vtkh.createScene(actors)
+            
+            for fmt in sceneFormats:
+                vtkh.exportScene(scene, outputDirSceneFile + ('/poses_tf_%05d' % i), ext=fmt, names=names)
+                
     
     return results
     

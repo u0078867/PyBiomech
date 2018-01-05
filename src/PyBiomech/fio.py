@@ -234,6 +234,42 @@ def readMimics(fileName, sections):
                 data['markers'][name] = [x, y, z]
             
     return data
+    
+    
+def readSplinesMimics(fileName):
+    
+    # Read file
+    with open(fileName) as f:
+        content = f.readlines()
+        
+    # Parse content
+    state = 'skip'
+    data = {}
+    data['splines'] = {}
+    for line in content:
+        if state == 'skip':
+            if re.match('Spline:', line):
+                state = 'parse-name'
+        elif state == 'parse-name':
+            name = line.split('Name:')[1].strip()
+            data['splines'][name] = []
+            state = 'parse'
+        else:
+            if line == '':
+                state = 'skip'
+                continue
+            p = line.split(':')
+            if (re.match('Xp,Yp,Zp', p[0])):
+                data['splines'] = {}
+                state = 'skip'
+                continue
+            v = p[1].strip().split()
+            x = float(v[0])
+            y = float(v[1])
+            z = float(v[2])
+            data['splines'][name].append([x, y, z])
+            
+    return data
 
     
 def readSTL(filePath):
