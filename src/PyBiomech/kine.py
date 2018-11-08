@@ -7,6 +7,7 @@
 import numpy as np
 #from scipy.interpolate import interp1d
 from scipy.interpolate import InterpolatedUnivariateSpline
+import rotations as rot
 
 
 
@@ -99,7 +100,7 @@ def changeMarkersReferenceFrame(mkrs, Rfull):
 def rigidBodySVDFun(mkrs, mkrList, args):
     """Function for calculating the optimal roto-translation matrix from a rigid
     cluster of markers to laboratory reference frame. The computation, by using
-    SVD, minimizes the RMSE between the markers inthe laboratory reference frame
+    SVD, minimizes the RMSE between the markers in the laboratory reference frame
     and the position of the markers in the local reference frame.
     See ``rigidBodyTransformation()`` for more details.
 
@@ -191,6 +192,128 @@ def rigidBodySVDFun(mkrs, mkrList, args):
     info['eMax'] = eMax
     info['eMaxMarker'] = eMaxMarker
     return R, T, info
+    
+    
+def rigidBodySVDFun2(mkrs, mkrList, args):
+    """Function for calculating the optimal roto-translation matrix from a rigid
+    cluster of markers to laboratory reference frame. The computation, by using
+    SVD, minimizes the RMSE between the markers in the laboratory reference frame
+    and the position of the markers in the local reference frame. Additionally,
+    if requested, the origin marker is used as additional marker: its local
+    position in [0,0,0], while its laboratory position is created by trilaterating
+    3 markers. It can only be applied when the list of markers is of length 3.
+    See ``rigidBodyTransformation()`` for more details.
+
+    Parameters
+    ----------
+    mkrs : dict
+        Dictionary where each key is a marker name and each value
+        is a N x 3 np.ndarray of 3D coordinates, where N is the number of time frames.
+
+    mkrList : list
+        List of marker names used in the SVD.
+
+    args : mixed
+        Additional arguments:
+        - 'mkrsLoc': dictionary where keys are marker names and values are 3-elem
+        np.arrays indicating the coordinates in the local reference frame.
+        - 'verbose': boolean indicating verbosity of printing messages.
+        - 'useOriginFromTrilat': create a 4th marker to be used by SVD.
+        If ``len(mkrList) <> 3``, this option is ignored.
+
+    Returns
+    -------
+    R : np.ndarray
+        N x 3 x 3 rotation matrix.
+
+    T : np.ndarray
+        N x 3 translation vector.
+
+    """
+    
+    # Get verbosity
+    if 'verbose' in args:
+        verbose = args['verbose']
+    else:
+        verbose = True
+        
+    # Get request for additional origin from trilat
+    if 'useOriginFromTrilat' in args:
+        useOriginFromTrilat = args['useOriginFromTrilat']
+    else:
+        useOriginFromTrilat = False
+
+    # Extract coordinates of markers in rigid local reference frame
+    mkrsLoc = args['mkrsLoc']
+
+    # Create Nmarkers x 3 matrix for local coordinates
+    mkrList_ = mkrList[:]
+    x = np.array([np.asarray(mkrsLoc[m]) for m in mkrList])
+    
+    # Check if trilat can actually be used
+    useOriginFromTrilat = useOriginFromTrilat and len(mkrList) == 3
+    
+    if useOriginFromTrilat:
+        x = np.vstack([x, [0,0,0]])
+        mkrList_.append(','.join(mkrList) + ' center')
+
+    # Loop for each time frame
+    Nf = mkrs[mkrList[0]].shape[0]
+    R = np.zeros((Nf, 3, 3))
+    T = np.zeros((Nf, 3))
+    RMSE = np.zeros((Nf,))
+    eMax = np.zeros((Nf,))
+    eMaxMarker = Nf * [None]
+    for i in xrange(0,Nf):
+        # Create Nmarkers x 3 matrix for global coordinates
+        y = np.array([mkrs[m][i,:].tolist() for m in mkrList])
+        
+        if useOriginFromTrilat:
+            p = np.array(y)
+            r = [np.sqrt(np.sum(mkrsLoc[m]**2)) for m in mkrList]
+            u, v = trilateration(p, r)
+            c = p[0,:] + u + v
+            y = np.vstack([y, c])
+
+        # Calculate number of visible markers
+        idxNan = np.isnan([y[:,0]])[0]
+        Nv = y.shape[0] - idxNan.sum()
+
+        # Check minimum markers number
+        if Nv >= 3:
+
+            # Calculate optimal roto-translation matrix
+            Ri, Ti, ei = rigidBodyTransformation(x[~idxNan,:], y[~idxNan,:])
+
+        else:
+
+            # Set data to nan
+            Ri = np.empty((3,3)) * np.nan
+            Ti = np.empty((3,)) * np.nan
+            ei = np.empty((y.shape[0],)) * np.nan
+            print('Only %d markers are visible for frame %d. Data will be set to nan' % (Nv, i))
+
+        # Calculate RSME
+        RMSEi = np.sqrt(np.sum(ei))
+        iMaxi = np.argmax(ei)
+        eMaxi = np.max(ei)
+
+        if verbose:
+            print('RMSE for rigid pose estimation (%d markers) for frame %d: %.5f mm. Max distance for %s: %.5f mm' % (Nv, i, RMSEi, mkrList_[iMaxi], eMaxi))
+        
+        # Insert data
+        R[i,:,:] = Ri
+        T[i,:] = Ti
+        RMSE[i] = RMSEi
+        eMax[i] = eMaxi
+        eMaxMarker[i] = mkrList_[iMaxi]
+
+    # Return data
+    info = {}
+    info['RMSE'] = RMSE
+    info['eMax'] = eMax
+    info['eMaxMarker'] = eMaxMarker
+    return R, T, info
 
 
 def rigidBodyTransformation(x, y):
@@ -243,11 +366,11 @@ def rigidBodyTransformation(x, y):
     Srank = np.sum(s > tol)
     if Srank < 2:
         raise Exception('Markers are probably colinear aligned')
-    if Srank < 3:
-        # All markers in one plane
-        # Calculate cross product, i.e. normal vector
-        U[:,2] = np.cross(U[:,0], U[:,1])
-        V[:,2] = np.cross(V[:,0], V[:,1])
+#    if Srank < 3:
+#        # All markers in one plane
+#        # Calculate cross product, i.e. normal vector
+#        U[:,2] = np.cross(U[:,0], U[:,1])
+#        V[:,2] = np.cross(V[:,0], V[:,1])
 
     # Calculation of R, t and e
     D = np.round(np.linalg.det(np.dot(U, V.T))) # if D=-1 correction is needed:
@@ -745,14 +868,14 @@ def nonCollinear5PointsStylusFun(P, args, verbose=True):
         # Perform SVD for triangle of markers P1-P3-P5
         print('Performing SVD with P1-P3-P5 ...')
         mkrNames1 = [nameP1, nameP3, nameP5]
-        R1, T1 = rigidBodySVDFun(P, mkrNames1, dataSVD)
+        R1, T1, info1 = rigidBodySVDFun(P, mkrNames1, dataSVD)
         RT1 = composeRotoTranslMatrix(R1, T1)
         Pf1 = changeMarkersReferenceFrame(args['pos'], RT1)
         
         # Perform SVD for triangle of markers P2-P4-P5
         print('Performing SVD with P2-P4-P5 ...')
         mkrNames2 = [nameP2, nameP4, nameP5]
-        R2, T2 = rigidBodySVDFun(P, mkrNames2, dataSVD)
+        R2, T2, info2 = rigidBodySVDFun(P, mkrNames2, dataSVD)
         RT2 = composeRotoTranslMatrix(R2, T2)
         Pf2 = changeMarkersReferenceFrame(args['pos'], RT2)
         
@@ -767,11 +890,11 @@ def nonCollinear5PointsStylusFun(P, args, verbose=True):
         
         # Perform SVD with all visible points
         print('Performing SVD ...')
-        R, T = rigidBodySVDFun(P, mkrNames, dataSVD)
+        R, T, info = rigidBodySVDFun(P, mkrNames, dataSVD)
 #        try:
-#            R, T = rigidBodySVDFun(P, ['Wand:WN','Wand:WE','Wand:WM','Wand:WS'], dataSVD)
+#            R, T, info = rigidBodySVDFun(P, ['Wand:WN','Wand:WE','Wand:WM','Wand:WS'], dataSVD)
 #        except:
-#            R, T = rigidBodySVDFun(P, ['WN','WE','WM','WS'], dataSVD)
+#            R, T, info = rigidBodySVDFun(P, ['WN','WE','WM','WS'], dataSVD)
         RT = composeRotoTranslMatrix(R, T)
         Pf = changeMarkersReferenceFrame(args['pos'], RT)
         
@@ -1007,7 +1130,7 @@ def calculateStylusTipInCluster(stylus, markers, clusterMkrList, clusterArgs):
     """
 
     # Calculate reference frame
-    R, T = rigidBodySVDFun(markers, clusterMkrList, args=clusterArgs)
+    R, T, info = rigidBodySVDFun(markers, clusterMkrList, args=clusterArgs)
 
     # Invert roto-translation matrix
     gRl = composeRotoTranslMatrix(R, T)
@@ -1028,7 +1151,184 @@ def calculateStylusTipInCluster(stylus, markers, clusterMkrList, clusterArgs):
     tipLoc = changeMarkersReferenceFrame(markers, lRg)['Tip']
 
     return tipLoc
+    
+    
+    
+def thoraxPoseISB(mkrs):
+    """Calculate roto-translation matrix from thorax (ISB conventions) to
+    laboratory reference frame.
 
+    Parameters
+    ----------
+    mkrs : dict
+        Markers data. Keys are marker names, values are np.ndarray N x 3,
+        where N is the number of time frames. Used names are:
+
+        - 'IJ': incisura jugularis
+        - 'PX': processus xiphoideus,
+        - 'C7': processus spinosus of the 7th cervical vertebra
+        - 'T8': processus spinosus of the 8th thoracic vertebra
+
+    Returns
+    -------
+    R : np.ndarray
+        N x 3 x 3 rotation matrix.
+
+    T : np.ndarray
+        N x 3 translation vector.
+
+    References
+    ----------
+    Wu G, van der Helm FC, Veeger HE, Makhsous M, Van Roy P, Anglin C, Nagels J,
+    Karduna AR, McQuade K, Wang X, Werner FW, Buchholz B; International Society of
+    Biomechanics. ISB recommendation on definitions of joint coordinate systems of
+    various joints for the reporting of human joint motion--Part II: shoulder, elbow,
+    wrist and hand. J Biomech. 2005 May;38(5):981-992. Review. PubMed PMID: 15844264.
+
+
+    """
+
+    # Define markers to use
+    IJ = mkrs['IJ']
+    PX = mkrs['PX']
+    C7 = mkrs['C7']
+    T8 = mkrs['T8']
+
+    # Create versors
+    Otho = IJ.copy()
+    Ytho = getVersor(0.5 * (IJ + C7) - 0.5 * (T8 + PX))
+    Ztho = getVersor(np.cross(IJ - 0.5 * (T8 + PX), C7 - 0.5 * (T8 + PX)))
+    Xtho = getVersor(np.cross(Ytho, Ztho))
+
+    # Create rotation matrix from shank reference frame to laboratory reference frame
+    R = np.array((Xtho.T, Ytho.T, Ztho.T))   # 3 x 3 x N
+    R = np.transpose(R, (2,1,0))  # N x 3 x 3
+
+    # Return data
+    return R, Otho
+    
+    
+
+def pelvisPoseISB(mkrs, s='R'):
+    """Calculate roto-translation matrix from pelvis (ISB conventions) to
+    laboratory reference frame.
+
+    Parameters
+    ----------
+    mkrs : dict
+        Markers data. Keys are marker names, values are np.ndarray N x 3,
+        where N is the number of time frames. Used names are:
+
+        - 'RASI': right spina iliaca anterior superior
+        - 'LASI': right spina iliaca anterior superior
+        - 'RPSI': right spina iliaca posterior superior
+        - 'LPSI': right spina iliaca posterior superior
+
+    s : {'R', 'L'}
+        Anatomical side.
+
+    Returns
+    -------
+    R : np.ndarray
+        N x 3 x 3 rotation matrix.
+
+    T : np.ndarray
+        N x 3 translation vector.
+
+    References
+    ----------
+    Wu G, Siegler S, Allard P, Kirtley C, Leardini A, Rosenbaum D, Whittle M,
+    D'Lima DD, Cristofolini L, Witte H, Schmid O, Stokes I; Standardization and
+    Terminology Committee of the International Society of Biomechanics. ISB
+    recommendation on definitions of joint coordinate system of various joints for
+    the reporting of human joint motion--part I: ankle, hip, and spine. International
+    Society of Biomechanics. J Biomech. 2002 Apr;35(4):543-8. PubMed PMID: 11934426.
+
+    """
+
+    # Define markers to use
+    RASI = mkrs['RASI']
+    LASI = mkrs['LASI']
+    RPSI = mkrs['RPSI']
+    LPSI = mkrs['LPSI']
+
+    # Create versors
+    O = (RASI + LASI) / 2
+    Opel = O.copy()
+    Zpel = getVersor(RASI - LASI)
+    if s == 'R':
+        Ypel = getVersor(np.cross(Zpel, RASI - 0.5 * (LPSI + RPSI)))
+    else:
+        Ypel = getVersor(np.cross(Zpel, LASI - 0.5 * (LPSI + RPSI)))
+    Xpel = getVersor(np.cross(Ypel, Zpel))
+
+    # Create rotation matrix from shank reference frame to laboratory reference frame
+    R = np.array((Xpel.T, Ypel.T, Zpel.T))   # 3 x 3 x N
+    R = np.transpose(R, (2,1,0))  # N x 3 x 3
+
+    # Return data
+    return R, Opel
+    
+    
+def pelvisPoseNoOneASI(mkrs, s='R'):
+    """Calculate roto-translation matrix from pelvis (ISB conventions) to
+    laboratory reference frame.
+
+    Parameters
+    ----------
+    mkrs : dict
+        Markers data. Keys are marker names, values are np.ndarray N x 3,
+        where N is the number of time frames. Used names are:
+
+        - 'RASI': right spina iliaca anterior superior
+        - 'LASI': right spina iliaca anterior superior
+        - 'RPSI': right spina iliaca posterior superior
+        - 'LPSI': right spina iliaca posterior superior
+
+    s : {'R', 'L'}
+        Anatomical side.
+
+    Returns
+    -------
+    R : np.ndarray
+        N x 3 x 3 rotation matrix.
+
+    T : np.ndarray
+        N x 3 translation vector.
+
+    References
+    ----------
+    Wu G, Siegler S, Allard P, Kirtley C, Leardini A, Rosenbaum D, Whittle M,
+    D'Lima DD, Cristofolini L, Witte H, Schmid O, Stokes I; Standardization and
+    Terminology Committee of the International Society of Biomechanics. ISB
+    recommendation on definitions of joint coordinate system of various joints for
+    the reporting of human joint motion--part I: ankle, hip, and spine. International
+    Society of Biomechanics. J Biomech. 2002 Apr;35(4):543-8. PubMed PMID: 11934426.
+
+    """
+
+    # Define markers to use
+    RASI = mkrs['RASI'] if 'RASI' in mkrs else None
+    LASI = mkrs['LASI'] if 'LASI' in mkrs else None
+    RPSI = mkrs['RPSI']
+    LPSI = mkrs['LPSI']
+
+    # Create versors
+    O = (RPSI + LPSI) / 2
+    Opel = O.copy()
+    Zpel = getVersor(RPSI - LPSI)
+    if s == 'R':
+        Ypel = getVersor(np.cross(Zpel, (RASI if RASI is not None else LASI) - 0.5 * (LPSI + RPSI)))
+    else:
+        Ypel = getVersor(np.cross(Zpel, (RASI if RASI is not None else LASI) - 0.5 * (LPSI + RPSI)))
+    Xpel = getVersor(np.cross(Ypel, Zpel))
+
+    # Create rotation matrix from shank reference frame to laboratory reference frame
+    R = np.array((Xpel.T, Ypel.T, Zpel.T))   # 3 x 3 x N
+    R = np.transpose(R, (2,1,0))  # N x 3 x 3
+
+    # Return data
+    return R, Opel
 
 
 def shankPoseISB(mkrs, s='R'):
@@ -1128,7 +1428,7 @@ def shankPoseISBWithClusterSVD(mkrs, clusterMkrList, args):
     """
 
     # Get roto-translation matrix from cluster to laboratory reference frame
-    R, T = rigidBodySVDFun(mkrs, clusterMkrList, args)
+    R, T, info = rigidBodySVDFun(mkrs, clusterMkrList, args)
     gRl = composeRotoTranslMatrix(R, T)
 
     # Get markers in local reference frame
@@ -1239,7 +1539,7 @@ def footPoseISBWithClusterSVD(mkrs, clusterMkrList, args):
     """
 
     # Get roto-translation matrix from cluster to laboratory reference frame
-    R, T = rigidBodySVDFun(mkrs, clusterMkrList, args)
+    R, T, info = rigidBodySVDFun(mkrs, clusterMkrList, args)
     gRl = composeRotoTranslMatrix(R, T)
 
     # Get markers in local reference frame
@@ -1348,7 +1648,7 @@ def calcaneusPoseWithClusterSVD(mkrs, clusterMkrList, args):
     """
 
     # Get roto-translation matrix from cluster to laboratory reference frame
-    R, T = rigidBodySVDFun(mkrs, clusterMkrList, args)
+    R, T, info = rigidBodySVDFun(mkrs, clusterMkrList, args)
     gRl = composeRotoTranslMatrix(R, T)
 
     # Get markers in local reference frame
@@ -1361,6 +1661,127 @@ def calcaneusPoseWithClusterSVD(mkrs, clusterMkrList, args):
     R, T = calcaneusPose(mkrsSeg, s=args['side'])
 
     return R, T, mkrsSeg
+    
+    
+def humerusPose(mkrs, s='R'):
+    """Calculate roto-translation matrix from humerus to
+    laboratory reference frame.
+
+    Parameters
+    ----------
+    mkrs : dict
+        Markers data. Keys are marker names, values are np.ndarray N x 3,
+        where N is the number of time frames. Used names are:
+
+        - 'GH': glenohumeral rotation center
+        - 'LE': most caudal point on lateral epicondyle
+        - 'ME': most caudal point on medial epicondyle
+
+    s : {'R', 'L'}
+        Anatomical side.
+
+    Returns
+    -------
+    R : np.ndarray
+        N x 3 x 3 rotation matrix.
+
+    T : np.ndarray
+        N x 3 translation vector.
+
+    References
+    ----------
+    Wu G, van der Helm FC, Veeger HE, Makhsous M, Van Roy P, Anglin C, Nagels J,
+    Karduna AR, McQuade K, Wang X, Werner FW, Buchholz B; International Society of
+    Biomechanics. ISB recommendation on definitions of joint coordinate systems of
+    various joints for the reporting of human joint motion--Part II: shoulder, elbow,
+    wrist and hand. J Biomech. 2005 May;38(5):981-992. Review. PubMed PMID: 15844264.
+
+    """
+
+    # Define markers to use
+    GH = mkrs['GH']
+    LE = mkrs['LE']
+    ME = mkrs['ME']
+
+    # Create versors
+    E = (LE + ME) / 2
+    Ohum = GH.copy()
+    if s == 'R':
+        Yhum = getVersor(GH - E)
+    else:
+        Yhum = -getVersor(GH - E)
+    if s == 'R':
+        Xhum = getVersor(np.cross(Yhum, LE - ME))
+    else:
+        Xhum = -getVersor(np.cross(Yhum, LE - ME))
+    Zhum = getVersor(np.cross(Xhum, Yhum))
+
+    # Create rotation matrix from foot reference frame to laboratory reference frame
+    R = np.array((Xhum.T, Yhum.T, Zhum.T))   # 3 x 3 x N
+    R = np.transpose(R, (2,1,0))  # N x 3 x 3
+
+    # Return data
+    return R, Ohum
+    
+    
+def scapulaPose(mkrs, s='R'):
+    """Calculate roto-translation matrix from scapula to
+    laboratory reference frame.
+
+    Parameters
+    ----------
+    mkrs : dict
+        Markers data. Keys are marker names, values are np.ndarray N x 3,
+        where N is the number of time frames. Used names are:
+
+        - 'AA': angulus acromialis (acromial angle)
+        - 'AI': angulus inferior (inferior angle),
+        - 'TS': trigonum spinae scapulae (root of the spine)
+
+    s : {'R', 'L'}
+        Anatomical side.
+
+    Returns
+    -------
+    R : np.ndarray
+        N x 3 x 3 rotation matrix.
+
+    T : np.ndarray
+        N x 3 translation vector.
+
+    References
+    ----------
+    Wu G, van der Helm FC, Veeger HE, Makhsous M, Van Roy P, Anglin C, Nagels J,
+    Karduna AR, McQuade K, Wang X, Werner FW, Buchholz B; International Society of
+    Biomechanics. ISB recommendation on definitions of joint coordinate systems of
+    various joints for the reporting of human joint motion--Part II: shoulder, elbow,
+    wrist and hand. J Biomech. 2005 May;38(5):981-992. Review. PubMed PMID: 15844264.
+
+    """
+
+    # Define markers to use
+    AA = mkrs['AA']
+    IA = mkrs['IA']
+    TS = mkrs['TS']
+
+    # Create versors
+    Osca = AA.copy()
+    if s == 'R':
+        Zsca = getVersor(AA - TS)
+    else:
+        Zsca = -getVersor(AA - TS)
+    if s == 'R':
+        Xsca = -getVersor(np.cross(Zsca, AA - IA))
+    else:
+        Xsca = getVersor(np.cross(Zsca, AA - IA))
+    Ysca = getVersor(np.cross(Zsca, Xsca))
+
+    # Create rotation matrix from foot reference frame to laboratory reference frame
+    R = np.array((Xsca.T, Ysca.T, Zsca.T))   # 3 x 3 x N
+    R = np.transpose(R, (2,1,0))  # N x 3 x 3
+
+    # Return data
+    return R, Osca
 
 
 
@@ -1453,6 +1874,60 @@ def R2zxy(Rvect):
       xAngle=x2
     res = zAngle, xAngle, yAngle
     return res
+    
+    
+def R2yxyKS(Rvect):
+    """Convert joint rotation matrix to YXY Euler sequence.
+
+    Parameters
+    ----------
+    Rvect : np.ndarray
+        A 9-elements array representing concatenated rows of the joint
+        rotation matrix.
+
+    Returns
+    -------
+    list
+        A list of 3 angle values.
+
+    """
+
+    row1 = Rvect[0:3]
+    row2 = Rvect[3:6]
+    row3 = Rvect[6:9]
+    R = np.matrix([row1,row2,row3]) # 3 x 3 joint rotation matrix
+    ya, x, y = rot.R_to_euler_yxy(np.linalg.inv(R))
+    
+    return y, x, ya
+    
+    
+def R2yxy(Rvect):
+    """Convert joint rotation matrix to YXY Euler sequence.
+
+    Parameters
+    ----------
+    Rvect : np.ndarray
+        A 9-elements array representing concatenated rows of the joint
+        rotation matrix.
+
+    Returns
+    -------
+    list
+        A list of 3 angle values.
+
+    """
+
+    row1 = Rvect[0:3]
+    row2 = Rvect[3:6]
+    row3 = Rvect[6:9]
+    R = np.matrix([row1,row2,row3]) # 3 x 3 joint rotation matrix
+    R = np.linalg.inv(R)
+
+    x = np.arccos(R[1,1])
+    y = np.arctan2(R[0,1], R[2,1])
+    ya = np.arctan2(R[1,0], -R[1,2])
+    
+    return y, x, ya
 
 
 def getJointAngles(R1, R2, R2anglesFun=R2zxy, funInput='jointR', **kwargs):
@@ -1501,9 +1976,21 @@ def getJointAngles(R1, R2, R2anglesFun=R2zxy, funInput='jointR', **kwargs):
             Rvect = Rvect[None,:]
         angles = np.apply_along_axis(R2anglesFun, 1, Rvect, **kwargs)
     # Correct for gimbal-lock
-    #angles = correctGimbal(angles)
+    angles[:,0] = correctGimbal(angles[:,0])
+    angles[:,1] = correctGimbal(angles[:,1])
+    angles[:,2] = correctGimbal(angles[:,2])
     return np.rad2deg(angles)
-
+    
+    
+def correctGimbal(angle):
+    angle2 = angle[:]
+    th = 1.5 * np.pi
+    for i in xrange(1, angle2.shape[0]):
+        if (angle2[i] - angle2[i-1]) >= th:
+            angle2[i:] -= 2 * np.pi
+        elif (angle2[i] - angle2[i-1]) <= -th:
+            angle2[i:] += 2 * np.pi
+    return angle2
 
 
 def getJointTransl(R1, R2, O1, O2, T2translFun=None, **kwargs):
@@ -1546,6 +2033,23 @@ def getJointTransl(R1, R2, O1, O2, T2translFun=None, **kwargs):
         Tvect = Tvect[None,:]
     transl = np.apply_along_axis(T2translFun, 1, Tvect, **kwargs)
     return transl
+    
+    
+def gesTranslFromSegment1(Tvect, **kwargs):
+
+    Rvect = Tvect[0:18]
+    O1, O2 = Tvect[18:21], Tvect[21:24]
+
+    R1v = Rvect[0:9]
+
+    x1, y1, z1 = R1v[0:3], R1v[3:6], R1v[6:9]
+
+    v = O1 - O2
+    Tx = np.dot(v, x1)
+    Ty = np.dot(v, y1)
+    Tz = np.dot(v, z1)
+
+    return Tx, Ty, Tz
     
     
 def lineFitSVD(points):

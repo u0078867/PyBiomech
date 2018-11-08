@@ -199,12 +199,31 @@ def createContourVTKData(vtkData, nValues):
     return vtkContour
     
 
-def createParamSpline(pts):
+def createParamSpline(pts, k=3, retU=False):
     p = np.array(pts)
-    x, y, z = p.T.tolist()
-    tck, u = interpolate.splprep([x, y, z], s=0)
+    pList = p.T.tolist()
+    tck, u = interpolate.splprep(pList, s=0, k=k)
     spline = tck
-    return spline
+    if retU:
+        return spline, u
+    else:
+        return spline
+        
+        
+def createPolynomial(pts, k=3, retU=False):
+    x, y = pts[:,0], pts[:,1]
+    try:
+        z = np.polyfit(x, y, k)
+        tck, u = interpolate.splprep([x.tolist(),x.tolist()], s=0, k=1)
+        poly = z, x
+    except:
+        z = np.nan * np.ones((k+1,))
+        poly = z, x
+        u = np.nan * np.ones((x.shape[0],))
+    if retU:
+        return poly, u
+    else:
+        return poly
     
 
 
@@ -226,6 +245,34 @@ def evalSpline(spline, u):
     tck = spline
     out = interpolate.splev(u, tck)
     p = np.array(out).T
+    return p
+    
+
+def evalPolynomial(poly, u):
+    z, x = poly
+    f = np.poly1d(z)
+    tck, dummy = interpolate.splprep([x.tolist(),x.tolist()], s=0, k=1)
+    xU = np.array(interpolate.splev(u, tck)[1])
+    out = f(xU)
+    p = np.array([xU, out]).T
+    return p
+    
+    
+def evalSplineDerivative(spline, u, der=1):
+    tck = spline
+    out = interpolate.splev(u, tck, der=der)
+    der = np.array(out).T
+    return der
+    
+    
+def evalPolynomialDerivative(poly, u, der=1):
+    z, x = poly
+    f = np.poly1d(z)
+    f2 = np.polyder(f, m=der)
+    tck, dummy = interpolate.splprep([x.tolist(),x.tolist()], s=0, k=1)
+    xU = np.array(interpolate.splev(u, tck)[1])
+    out = f2(xU)
+    p = np.array([np.ones((x.shape[0],)), out]).T
     return p
     
     

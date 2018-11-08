@@ -11,6 +11,7 @@ import numpy as np
 from xml.etree.ElementTree import ElementTree, Element, SubElement
 import json
 import scipy.io as sio
+from openpyxl import load_workbook
 
 
 def readC3D(fileName, sections, opts={}):
@@ -255,7 +256,7 @@ def readSplinesMimics(fileName):
             data['splines'][name] = []
             state = 'parse'
         else:
-            if line == '':
+            if line.strip() == '':
                 state = 'skip'
                 continue
             p = line.split(':')
@@ -378,4 +379,52 @@ def readORParamsFile(fileName):
     
 def writeMATFile(fileName, data):
     sio.savemat(fileName, {'data': data})
+    
+    
+def readXLSFile(fileName, sheet):
+    wb = load_workbook(filename=fileName, read_only=True)
+    ws = wb[sheet]
+    
+    sheetData = []
+    for row in ws.rows:
+        rowData = []
+        for cell in row:
+            rowData.append(cell.value)
+        sheetData.append(rowData)
+        
+    return sheetData
+    
+    
+def readIORTPointsFile(fileName):
+    data = readXLSFile(fileName, 'Measurements export')
+    points = {}
+    for i in xrange(1, len(data)):
+        row = data[i]
+        if all(v is None for v in row):
+            continue
+        pointName = row[1]
+        x, y, z = row[2], row[3], row[4]
+        points[pointName] = [x, y, z]
+        
+    return points
+    
+    
+def readStringListMapFile(fileName):
+    with open(fileName) as f:
+        content = f.read().splitlines()
+    data = {}
+    for line in content:
+        t = line.split(': ')
+        key = t[0]
+        values = t[1].split(', ')
+        for i, v in enumerate(values):
+            try:
+                values[i] = float(v)
+            except:
+                pass
+        data[key] = values
+    
+    return data
+    
+    
         

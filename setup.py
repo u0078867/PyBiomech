@@ -5,27 +5,37 @@ Created on Mon Apr 03 16:33:51 2017
 @author: u0078867
 """
 
-#import pypandoc
-#long_description = pypandoc.convert('README.md', 'rst', outputfile="README.rst")
-#print long_description
-
 
 from setuptools import setup, find_packages
+from setuptools.command.install import install
+from subprocess import check_call
+
+
+class PostInstallCommand(install):
+    """Post-installation for installation mode."""
+    def run(self):
+        install.run(self)
+        print('installing btk ...')
+        check_call("easy_install btk".split())
+        print('installing vtk ...')
+        check_call("conda install vtk=6.3.0".split())
 
 
 setup(
     name='PyBiomech',
-    version='0.14.0',
+    version='0.30.1',
     description='Collection of tools for certain biomechanical pipelines',
     long_description=open('README.rst').read(),
     packages=find_packages('src'),
     package_dir={'':'src'},
     install_requires=[
-        'numpy',
-        'scipy',
-        'vtk>=6.3.0',
-        'btk',
+        'numpy==1.14.2',
+        'scipy==1.1.0',
+        'matplotlib==2.1.0',
     ],
+    cmdclass={
+        'install': PostInstallCommand,
+    },
     include_package_data=True,
     license='MIT',
     author='u0078867',

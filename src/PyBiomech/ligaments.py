@@ -40,8 +40,19 @@ def ligamentPathBlankevoort1991(pIns, edgeSpline):
     if np.dot(p1 - pem, pup) < 0:
         pe1, pe2 = pe2, pe1
     if np.dot(np.cross(p1 - pem, p2 - pem), pe2 - pe1) < 0:
-        #print('straight line not penetrating')
+        print('Blankevoot: straight line not penetrating')
         pl = np.array((p1,p2))
+
+#    be = np.mean(pe, axis=0)
+#    xr = np.linspace(p1[0], p2[0], 100)
+#    yr = np.linspace(p1[1], p2[1], 100)
+#    zr = np.linspace(p1[2], p2[2], 100)
+#    pr = np.array([xr, yr, zr]).T
+#    print pr
+#    dist_pr_be = np.linalg.norm(pr-be, axis=1)
+#    dist_pe_be = np.linalg.norm(pe-be, axis=1)
+#    d = np.subtract.outer(dist_pr_be, dist_pe_be)
+#    print np.sum(d < 0)
         
     return pe, pl
     
