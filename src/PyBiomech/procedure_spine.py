@@ -315,12 +315,19 @@ def performSpineAnalysis(
             p2 = anglesDef[angleName][2]
             if plane == 'sagittal':
                 normalSlopes = normalSlopesSag
+                normalIntercepts = normalInterceptsSag
             elif plane == 'frontal':
                 normalSlopes = normalSlopesFro
+                normalIntercepts = normalInterceptsFro
             i1 = spinePointNamesNew.index(p1)
             i2 = spinePointNamesNew.index(p2)
             m1, m2 = normalSlopes[i1], normalSlopes[i2]
-            angle = spine.calcInterlinesAngle(m1, m2)
+            q1, q2 = normalIntercepts[i1], normalIntercepts[i2]
+            xCrossPoint = (q2 - q1) / (m1 - m2)
+            yCrossPoint = m1 * xCrossPoint + q1
+            angleSign = (xCrossPoint > spineDataSag[i1,1]) & (xCrossPoint > spineDataSag[i2,1])
+            angleSign = 2 * (angleSign - 0.5)
+            angle = angleSign * spine.calcInterlinesAngle(m1, m2)
             res['spineAngles'][plane][angleName][i] = angle
         
         if savePlots:
