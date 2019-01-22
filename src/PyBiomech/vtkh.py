@@ -272,7 +272,7 @@ def evalPolynomialDerivative(poly, u, der=1):
     tck, dummy = interpolate.splprep([x.tolist(),x.tolist()], s=0, k=1)
     xU = np.array(interpolate.splev(u, tck)[1])
     out = f2(xU)
-    p = np.array([np.ones((x.shape[0],)), out]).T
+    p = np.array([np.ones((xU.shape[0],)), out]).T
     return p
     
     

@@ -265,8 +265,28 @@ def performSpineAnalysis(
         # Calculate slope of spine normal at the wanted points
         #spineLineSagDer = spine.calcSplineTangentSlopes(spineDataSag, u='only_pts')
         spineLineSagDer = spine.calcPolynomialTangentSlopes(spineDataSag, u='only_pts', k=sagSpineSplineOrder)
+        print spineLineSagDer
         normalSlopesSag = -spineLineSagDer[:,1] / spineLineSagDer[:,0]
         normalInterceptsSag = spineDataSag[:,0] - normalSlopesSag * spineDataSag[:,1]
+        
+        # Search apex and inflexion points
+        uDense = np.arange(0, 1.001, 0.001)
+        der1Dense = spine.calcPolynomialDerivatives(spineDataSag, u=uDense, k=sagSpineSplineOrder, der=1)[:,1]
+        ndxDer1ChangeSign = np.append(np.diff(np.sign(der1Dense)), [False]) <> 0
+        if ndxDer1ChangeSign.sum() <> 2:
+            raise Exception('sagittal: there seems to be not exactly 2 apex points')
+        der2Dense = spine.calcPolynomialDerivatives(spineDataSag, u=uDense, k=sagSpineSplineOrder, der=2)[:,1]
+        ndxDer2ChangeSign = np.append(np.diff(np.sign(der2Dense)), [False]) <> 0
+        win = np.cumsum(ndxDer1ChangeSign)
+        win[win <> 1] = 0
+        win = win.astype(np.bool)
+        ndxDer2ChangeSign = ndxDer2ChangeSign & win
+        if ndxDer2ChangeSign.sum() <> 1:
+            raise Exception('sagittal: there seems to be not exactly 1 inflection point')
+        ndxU = ndxDer1ChangeSign | ndxDer2ChangeSign
+        spineAIASag = spine.evalPolynomial(spineDataSag, u=uDense[ndxU], k=sagSpineSplineOrder)
+        print spineAIASag
+        
 
         # Calculate angles between segments
         m1, m2 = normalSlopesSag[:-1], normalSlopesSag[1:]

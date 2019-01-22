@@ -170,6 +170,7 @@ def calculateShoulderKinematics(
     
 
 def assembleShoulderDataAsIsNoMetadata(
+                                    markersLoc=None,
                                     markers=None, 
                                     poses=None, 
                                     kine=None, 
@@ -178,6 +179,10 @@ def assembleShoulderDataAsIsNoMetadata(
     print('==== Assemblying shoulder data ...')
     
     data = {}
+    
+    if markersLoc is not None:
+        
+        data['markersLoc'] = markersLoc
     
     if markers is not None:
     

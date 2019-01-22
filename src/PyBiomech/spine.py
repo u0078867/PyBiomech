@@ -29,11 +29,25 @@ def create2DPolynomial(pts, u=np.arange(0, 1.01, 0.01), order=3):
     return pts2
     
     
+def evalPolynomial(pts, u, k=3):
+    poly = vtkh.createPolynomial(pts, k=k, retU=False)
+    val = vtkh.evalPolynomial(poly, u)
+    return val
+    
+    
 def calcPolynomialTangentSlopes(pts, u=np.arange(0, 1.01, 0.01), k=3):
-    spline, uPts = vtkh.createPolynomial(pts, k=k, retU=True)
+    poly, uPts = vtkh.createPolynomial(pts, k=k, retU=True)
     if u == 'only_pts':
         u = uPts
-    der = vtkh.evalPolynomialDerivative(spline, u, der=1)
+    der = vtkh.evalPolynomialDerivative(poly, u, der=1)
+    return der
+    
+    
+def calcPolynomialDerivatives(pts, u=np.arange(0, 1.01, 0.01), k=3, der=1):
+    poly, uPts = vtkh.createPolynomial(pts, k=k, retU=True)
+    if u == 'only_pts':
+        u = uPts
+    der = vtkh.evalPolynomialDerivative(poly, u, der=der)
     return der
     
     
