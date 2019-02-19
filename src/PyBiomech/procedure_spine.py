@@ -145,7 +145,6 @@ def performSpineAnalysis(
     
         # Handles clusters
         segmentsInfo = fio.readStringListMapFile(segmentsDescFile)
-        print segmentsInfo
         
         for s in segmentsInfo:
             segmentName = s
@@ -166,7 +165,6 @@ def performSpineAnalysis(
                     clusterBaseNameSpec = s[1]
                 del clusterInfoSpec[s[0]]
                 clusterInfoSpec[s[1]] = clusterInfo[s[0]]
-            print(clusterInfoSpec)
             
             # SVD for acquisition system 1
             args = {}
@@ -205,6 +203,8 @@ def performSpineAnalysis(
     
     # Express spine points in pelvis reference frame
     spinePointNamesNew = spinePointNames[:]
+    AIAPointNames = ['Apex top', 'Inflex', 'Apex bottom']
+    spinePointNamesNewAll = spinePointNamesNew + AIAPointNames
     for i, m in enumerate(spinePointNames):
         # If wanted point name does not exist
         if m not in markers2New:
@@ -240,6 +240,9 @@ def performSpineAnalysis(
         res['spineAngles'][space][angleName] = np.zeros((Nf,))
     res['extraData'] = {}
     res['extraData']['SVA'] = np.zeros((Nf,))
+    res['extraData']['SagApexTopHeight'] = np.zeros((Nf,))
+    res['extraData']['SagInflexHeight'] = np.zeros((Nf,))
+    res['extraData']['SagApexBottomHeight'] = np.zeros((Nf,))
     
     # Create results directory if not existing
     if not os.path.exists(resultsDir):
@@ -265,11 +268,10 @@ def performSpineAnalysis(
         # Calculate slope of spine normal at the wanted points
         #spineLineSagDer = spine.calcSplineTangentSlopes(spineDataSag, u='only_pts')
         spineLineSagDer = spine.calcPolynomialTangentSlopes(spineDataSag, u='only_pts', k=sagSpineSplineOrder)
-        print spineLineSagDer
         normalSlopesSag = -spineLineSagDer[:,1] / spineLineSagDer[:,0]
         normalInterceptsSag = spineDataSag[:,0] - normalSlopesSag * spineDataSag[:,1]
         
-        # Search apex and inflexion points
+        # Search apex and inflexion points (AIA)
         uDense = np.arange(0, 1.001, 0.001)
         der1Dense = spine.calcPolynomialDerivatives(spineDataSag, u=uDense, k=sagSpineSplineOrder, der=1)[:,1]
         ndxDer1ChangeSign = np.append(np.diff(np.sign(der1Dense)), [False]) <> 0
@@ -284,15 +286,25 @@ def performSpineAnalysis(
         if ndxDer2ChangeSign.sum() <> 1:
             raise Exception('sagittal: there seems to be not exactly 1 inflection point')
         ndxU = ndxDer1ChangeSign | ndxDer2ChangeSign
-        spineAIASag = spine.evalPolynomial(spineDataSag, u=uDense[ndxU], k=sagSpineSplineOrder)
-        print spineAIASag
+        spineDataAIASag = spine.evalPolynomial(spineDataSag, u=uDense[ndxU], k=sagSpineSplineOrder)
+        res['extraData']['SagApexTopHeight'][i] = spineDataAIASag[0,0]
+        res['extraData']['SagInflexHeight'][i] = spineDataAIASag[1,0]
+        res['extraData']['SagApexBottomHeight'][i] = spineDataAIASag[2,0]
+        spineDataSagAll = np.vstack((spineDataSag, spineDataAIASag))
         
+        # Calculate slope of spine normal at the wanted points (AIA)
+        spineLineAIASagDer = spine.calcPolynomialTangentSlopes(spineDataAIASag, u='only_pts', k=sagSpineSplineOrder)
+        normalSlopesAIASag = -spineLineAIASagDer[:,1] / spineLineAIASagDer[:,0]
+        normalInterceptsAIASag = spineDataAIASag[:,0] - normalSlopesAIASag * spineDataAIASag[:,1]
+        
+        normalSlopesSagAll = np.concatenate((normalSlopesSag, normalSlopesAIASag))
+        normalInterceptsSagAll = np.concatenate((normalInterceptsSag, normalInterceptsAIASag))
 
         # Calculate angles between segments
         m1, m2 = normalSlopesSag[:-1], normalSlopesSag[1:]
         q1, q2 = normalInterceptsSag[:-1], normalInterceptsSag[1:]
         xCrossPoint = (q2 - q1) / (m1 - m2)
-        yCrossPoint = m1 * xCrossPoint + q1
+#        yCrossPoint = m1 * xCrossPoint + q1
         angleSign = (xCrossPoint > spineDataSag[:-1,1]) & (xCrossPoint > spineDataSag[1:,1])
         angleSign = 2 * (angleSign - 0.5)
         angles = angleSign * spine.calcInterlinesAngle(m1, m2)
@@ -321,7 +333,7 @@ def performSpineAnalysis(
         m1, m2 = normalSlopesFro[:-1], normalSlopesFro[1:]
         q1, q2 = normalInterceptsFro[:-1], normalInterceptsFro[1:]
         xCrossPoint = (q2 - q1) / (m1 - m2)
-        yCrossPoint = m1 * xCrossPoint + q1
+#        yCrossPoint = m1 * xCrossPoint + q1
         angleSign = (xCrossPoint > spineDataSag[:-1,1]) & (xCrossPoint > spineDataSag[1:,1])
         angleSign = 2 * (angleSign - 0.5)
         angles = angleSign * spine.calcInterlinesAngle(m1, m2)
@@ -334,18 +346,21 @@ def performSpineAnalysis(
             p1 = anglesDef[angleName][1]
             p2 = anglesDef[angleName][2]
             if plane == 'sagittal':
-                normalSlopes = normalSlopesSag
-                normalIntercepts = normalInterceptsSag
+                normalSlopes = normalSlopesSagAll
+                normalIntercepts = normalInterceptsSagAll
             elif plane == 'frontal':
                 normalSlopes = normalSlopesFro
                 normalIntercepts = normalInterceptsFro
-            i1 = spinePointNamesNew.index(p1)
-            i2 = spinePointNamesNew.index(p2)
+            try:
+                i1 = spinePointNamesNewAll.index(p1)
+                i2 = spinePointNamesNewAll.index(p2)
+            except:
+                raise Exception('%s and/or %s names are not recognized' % (p1,p2))
             m1, m2 = normalSlopes[i1], normalSlopes[i2]
             q1, q2 = normalIntercepts[i1], normalIntercepts[i2]
             xCrossPoint = (q2 - q1) / (m1 - m2)
-            yCrossPoint = m1 * xCrossPoint + q1
-            angleSign = (xCrossPoint > spineDataSag[i1,1]) & (xCrossPoint > spineDataSag[i2,1])
+#            yCrossPoint = m1 * xCrossPoint + q1
+            angleSign = (xCrossPoint > spineDataSagAll[i1,1]) & (xCrossPoint > spineDataSagAll[i2,1])
             angleSign = 2 * (angleSign - 0.5)
             angle = angleSign * spine.calcInterlinesAngle(m1, m2)
             res['spineAngles'][plane][angleName][i] = angle
@@ -370,6 +385,7 @@ def performSpineAnalysis(
             plt.subplot(1, 2, 1)
             plt.plot(spineDataSag[:,1], spineDataSag[:,0], 'o')
             plt.plot(spineLineSag[:,1], spineLineSag[:,0], lw=3)
+            plt.plot(spineDataAIASag[:,1], spineDataAIASag[:,0], 'rx')
             plt.plot(extraDataSag[0,1], extraDataSag[0,0], 'bo')
             ax = plt.gca()
             xlim, ylim = ax.get_xlim(), ax.get_ylim()

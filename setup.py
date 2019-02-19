@@ -23,7 +23,7 @@ class PostInstallCommand(install):
 
 setup(
     name='PyBiomech',
-    version='0.32.0',
+    version='0.33.0',
     description='Collection of tools for certain biomechanical pipelines',
     long_description=open('README.rst').read(),
     packages=find_packages('src'),
