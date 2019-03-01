@@ -23,7 +23,7 @@ class PostInstallCommand(install):
 
 setup(
     name='PyBiomech',
-    version='0.33.0',
+    version='0.33.1',
     description='Collection of tools for certain biomechanical pipelines',
     long_description=open('README.rst').read(),
     packages=find_packages('src'),
@@ -32,6 +32,7 @@ setup(
         'numpy==1.14.2',
         'scipy==1.1.0',
         'matplotlib==2.1.0',
+        'openpyxl==2.3.2',
     ],
     cmdclass={
         'install': PostInstallCommand,

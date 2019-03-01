@@ -1,13 +1,7 @@
 Requirements:
 -------------
 
-A minimal Python environment with *setuptools* library is expected. We recommend *Anaconda*.
-*PyBiomech* was tested on:
-
-- Anaconda Python 2.7 64-bit
-- VTK 6.3.0
-- NumPy 1.12.0
-- SciPy 0.18.1
+A minimal Python environment with *setuptools* library is expected. We recommend *Anaconda* 64-bit.
 
 Installation (for Anaconda)
 ---------------------------
@@ -42,4 +36,4 @@ Update
 
   .. code-block:: sh
 
-     pip install PyBiomech --upgrade --no-deps
+     pip install PyBiomech --upgrade
