@@ -260,6 +260,8 @@ def performSpineAnalysis(
         # Interpolate spline in sagittal plane
         #spineDataSag = spineData[i,0:2,:].T # Np x 2
         spineDataSag = spineData[i,1::-1,:].T # Np x 2
+        spineDataSagSort = np.argsort(spineDataSag[:,0])[::-1]
+        spineDataSag = spineDataSag[spineDataSagSort,:]
         extraDataSag = extraData[i,1::-1,:].T # Ne x 2
         Np = spineDataSag.shape[0]
         #spineLineSag = spine.create2DSpline(spineDataSag, order=sagSpineSplineOrder)
@@ -272,21 +274,32 @@ def performSpineAnalysis(
         normalInterceptsSag = spineDataSag[:,0] - normalSlopesSag * spineDataSag[:,1]
         
         # Search apex and inflexion points (AIA)
+        AIASagOK = True
         uDense = np.arange(0, 1.001, 0.001)
         der1Dense = spine.calcPolynomialDerivatives(spineDataSag, u=uDense, k=sagSpineSplineOrder, der=1)[:,1]
         ndxDer1ChangeSign = np.append(np.diff(np.sign(der1Dense)), [False]) <> 0
+#        spineDataAIASag = spine.evalPolynomial(spineDataSag, u=uDense[ndxDer1ChangeSign], k=sagSpineSplineOrder)
+#        plt.plot(spineLineSag[:,1], spineLineSag[:,0], lw=3)
+#        plt.plot(spineDataAIASag[:,1], spineDataAIASag[:,0], 'rx')
+#        plt.show()
         if ndxDer1ChangeSign.sum() <> 2:
-            raise Exception('sagittal: there seems to be not exactly 2 apex points')
-        der2Dense = spine.calcPolynomialDerivatives(spineDataSag, u=uDense, k=sagSpineSplineOrder, der=2)[:,1]
-        ndxDer2ChangeSign = np.append(np.diff(np.sign(der2Dense)), [False]) <> 0
-        win = np.cumsum(ndxDer1ChangeSign)
-        win[win <> 1] = 0
-        win = win.astype(np.bool)
-        ndxDer2ChangeSign = ndxDer2ChangeSign & win
-        if ndxDer2ChangeSign.sum() <> 1:
-            raise Exception('sagittal: there seems to be not exactly 1 inflection point')
-        ndxU = ndxDer1ChangeSign | ndxDer2ChangeSign
-        spineDataAIASag = spine.evalPolynomial(spineDataSag, u=uDense[ndxU], k=sagSpineSplineOrder)
+#            raise Exception('sagittal: there seems to be not exactly 2 apex points')
+            AIASagOK = False
+        if AIASagOK:
+            der2Dense = spine.calcPolynomialDerivatives(spineDataSag, u=uDense, k=sagSpineSplineOrder, der=2)[:,1]
+            ndxDer2ChangeSign = np.append(np.diff(np.sign(der2Dense)), [False]) <> 0
+            win = np.cumsum(ndxDer1ChangeSign)
+            win[win <> 1] = 0
+            win = win.astype(np.bool)
+            ndxDer2ChangeSign = ndxDer2ChangeSign & win
+            if ndxDer2ChangeSign.sum() <> 1:
+#                raise Exception('sagittal: there seems to be not exactly 1 inflection point')
+                AIASagOK = False
+        if AIASagOK:
+            ndxU = ndxDer1ChangeSign | ndxDer2ChangeSign
+            spineDataAIASag = spine.evalPolynomial(spineDataSag, u=uDense[ndxU], k=sagSpineSplineOrder)
+        else:
+            spineDataAIASag = np.nan * np.zeros((3, 2))
         res['extraData']['SagApexTopHeight'][i] = spineDataAIASag[0,0]
         res['extraData']['SagInflexHeight'][i] = spineDataAIASag[1,0]
         res['extraData']['SagApexBottomHeight'][i] = spineDataAIASag[2,0]
@@ -319,6 +332,8 @@ def performSpineAnalysis(
         # Interpolate spline in frontal plane
 #        spineDataFro = spineData[i,2:0:-1,:].T # Np x 2
         spineDataFro = spineData[i,1:,:].T # Np x 2
+        spineDataFroSort = np.argsort(spineDataFro[:,0])[::-1]
+        spineDataFro = spineDataFro[spineDataFroSort,:]
         Np = spineDataFro.shape[0]
 #        spineLineFro = spine.create2DSpline(spineDataFro, order=froSpineSplineOrder)
         spineLineFro = spine.create2DPolynomial(spineDataFro, order=froSpineSplineOrder)
