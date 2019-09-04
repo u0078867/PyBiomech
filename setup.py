@@ -18,12 +18,12 @@ class PostInstallCommand(install):
         print('installing btk ...')
         check_call("easy_install btk".split())
         print('installing vtk ...')
-        check_call("conda install vtk=6.3.0".split())
+        check_call("conda install -c anaconda vtk=6.3.0".split())
 
 
 setup(
     name='PyBiomech',
-    version='0.34.0',
+    version='0.35.0',
     description='Collection of tools for certain biomechanical pipelines',
     long_description=open('README.rst').read(),
     packages=find_packages('src'),
