@@ -6,7 +6,7 @@
 
 import numpy as np
 
-import fio, mplh, kine, kine_or, vtkh, ligaments as liga, contacts, spine
+from . import fio, mplh, kine, kine_or, vtkh, ligaments as liga, contacts, spine
 
 import re
 from itertools import groupby
@@ -809,7 +809,7 @@ def assembleKneeDataGranular(
     
     data = Nf * [None]
     
-    for i in xrange(Nf):
+    for i in range(Nf):
         
         row = []
         
@@ -1002,7 +1002,7 @@ def performSpineAnalysis(
     
     # Handles clusters
     segmentsInfo = fio.readStringListMapFile(segmentsDescFile)
-    print segmentsInfo
+    print(segmentsInfo)
     
     for s in segmentsInfo:
         segmentName = s
@@ -1069,7 +1069,7 @@ def performSpineAnalysis(
     res = {}
     res['newMarkers'] = markers2New
     sup, inf = spinePointNames[:-1], spinePointNames[1:]
-    spineAngleNames = [sup[i] + '_' + inf[i] for i in xrange(len(sup))]
+    spineAngleNames = [sup[i] + '_' + inf[i] for i in range(len(sup))]
     Nf = spineData.shape[0]
     res['spineAngles'] = {}
     res['spineAngles']['sagittal'] = {a: np.zeros((Nf,)) for a in spineAngleNames}
@@ -1079,7 +1079,7 @@ def performSpineAnalysis(
         os.mkdir(resultsDir)
     
     # Process data
-    for i in xrange(Nf):
+    for i in range(Nf):
         
         print('processing time frame %d ...' % i)        
         
@@ -1095,7 +1095,7 @@ def performSpineAnalysis(
         # Calculate angles between segments
         m1, m2 = normalSlopes[:-1], normalSlopes[1:]
         angles = spine.calcInterlinesAngle(m1, m2)
-        for j in xrange(len(spineAngleNames)):
+        for j in range(len(spineAngleNames)):
             res['spineAngles']['sagittal'][spineAngleNames[j]][i] = angles[j]
         
         if savePlots:

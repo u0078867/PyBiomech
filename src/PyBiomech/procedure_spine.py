@@ -6,7 +6,7 @@
 
 import numpy as np
 
-import fio, kine, spine
+from . import fio, kine, spine
 
 import os
 from mpl_toolkits.mplot3d import Axes3D
@@ -229,7 +229,7 @@ def performSpineAnalysis(
     res['newMarkers'] = markers2New
     res['newMarkers'].update(extraPoints)
     sup, inf = spinePointNamesNew[:-1], spinePointNamesNew[1:]
-    spineAngleNames = [sup[i] + '_' + inf[i] for i in xrange(len(sup))]
+    spineAngleNames = [sup[i] + '_' + inf[i] for i in range(len(sup))]
     Nf = spineData.shape[0]
     res['spineAngles'] = {}
     res['spineAngles']['sagittal'] = {a: np.zeros((Nf,)) for a in spineAngleNames}
@@ -277,22 +277,22 @@ def performSpineAnalysis(
         AIASagOK = True
         uDense = np.arange(0, 1.001, 0.001)
         der1Dense = spine.calcPolynomialDerivatives(spineDataSag, u=uDense, k=sagSpineSplineOrder, der=1)[:,1]
-        ndxDer1ChangeSign = np.append(np.diff(np.sign(der1Dense)), [False]) <> 0
+        ndxDer1ChangeSign = np.append(np.diff(np.sign(der1Dense)), [False]) != 0
 #        spineDataAIASag = spine.evalPolynomial(spineDataSag, u=uDense[ndxDer1ChangeSign], k=sagSpineSplineOrder)
 #        plt.plot(spineLineSag[:,1], spineLineSag[:,0], lw=3)
 #        plt.plot(spineDataAIASag[:,1], spineDataAIASag[:,0], 'rx')
 #        plt.show()
-        if ndxDer1ChangeSign.sum() <> 2:
+        if ndxDer1ChangeSign.sum() != 2:
 #            raise Exception('sagittal: there seems to be not exactly 2 apex points')
             AIASagOK = False
         if AIASagOK:
             der2Dense = spine.calcPolynomialDerivatives(spineDataSag, u=uDense, k=sagSpineSplineOrder, der=2)[:,1]
-            ndxDer2ChangeSign = np.append(np.diff(np.sign(der2Dense)), [False]) <> 0
+            ndxDer2ChangeSign = np.append(np.diff(np.sign(der2Dense)), [False]) != 0
             win = np.cumsum(ndxDer1ChangeSign)
-            win[win <> 1] = 0
+            win[win != 1] = 0
             win = win.astype(np.bool)
             ndxDer2ChangeSign = ndxDer2ChangeSign & win
-            if ndxDer2ChangeSign.sum() <> 1:
+            if ndxDer2ChangeSign.sum() != 1:
 #                raise Exception('sagittal: there seems to be not exactly 1 inflection point')
                 AIASagOK = False
         if AIASagOK:
@@ -321,7 +321,7 @@ def performSpineAnalysis(
         angleSign = (xCrossPoint > spineDataSag[:-1,1]) & (xCrossPoint > spineDataSag[1:,1])
         angleSign = 2 * (angleSign - 0.5)
         angles = angleSign * spine.calcInterlinesAngle(m1, m2)
-        for j in xrange(len(spineAngleNames)):
+        for j in range(len(spineAngleNames)):
             res['spineAngles']['sagittal'][spineAngleNames[j]][i] = angles[j]
             
         # Calculate SVA
@@ -352,7 +352,7 @@ def performSpineAnalysis(
         angleSign = (xCrossPoint > spineDataSag[:-1,1]) & (xCrossPoint > spineDataSag[1:,1])
         angleSign = 2 * (angleSign - 0.5)
         angles = angleSign * spine.calcInterlinesAngle(m1, m2)
-        for j in xrange(len(spineAngleNames)):
+        for j in range(len(spineAngleNames)):
             res['spineAngles']['frontal'][spineAngleNames[j]][i] = angles[j]
             
         # Calculate custom angles

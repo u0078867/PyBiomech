@@ -7,7 +7,7 @@
 import numpy as np
 #from scipy.interpolate import interp1d
 from scipy.interpolate import InterpolatedUnivariateSpline
-import rotations as rot
+from . import rotations as rot
 
 
 
@@ -148,7 +148,7 @@ def rigidBodySVDFun(mkrs, mkrList, args):
     RMSE = np.zeros((Nf,))
     eMax = np.zeros((Nf,))
     eMaxMarker = Nf * [None]
-    for i in xrange(0,Nf):
+    for i in range(0,Nf):
 
         # Create Nmarkers x 3 matrix for global coordinates
         y = np.array([mkrs[m][i,:].tolist() for m in mkrList])
@@ -264,7 +264,7 @@ def rigidBodySVDFun2(mkrs, mkrList, args):
     RMSE = np.zeros((Nf,))
     eMax = np.zeros((Nf,))
     eMaxMarker = Nf * [None]
-    for i in xrange(0,Nf):
+    for i in range(0,Nf):
         # Create Nmarkers x 3 matrix for global coordinates
         y = np.array([mkrs[m][i,:].tolist() for m in mkrList])
         
@@ -519,7 +519,7 @@ def interpSignals(x, xNew, D, kSpline=1):
     """
 
     R = np.zeros((xNew.shape[0],D.shape[1])) * np.nan
-    for i in xrange(0, D.shape[1]):
+    for i in range(0, D.shape[1]):
         idx = ~np.isnan(D[:,i])
         fIdx = InterpolatedUnivariateSpline(x, idx, k=1)
         f = InterpolatedUnivariateSpline(x[idx], D[idx,i], k=kSpline)
@@ -561,8 +561,8 @@ def resampleMarker(M, x=None, origFreq=None, origX=None, step=None):
         Indices of ``x`` intersecting time vector of the original ``M``.
 
     """
-    if x <> None and (origFreq <> None or origX <> None):
-        if origFreq <> None:
+    if x is not None and (origFreq is not None or origX is not None):
+        if origFreq is not None:
             N = M.shape[0]
             dt = 1. / origFreq
             x1 = np.linspace(0, (N-1)*dt, num=N)
@@ -572,7 +572,7 @@ def resampleMarker(M, x=None, origFreq=None, origX=None, step=None):
 #        f = interp1d(x1, M, axis=0)
 #        M2 = f(x2)
         M2 = interpSignals(x1, x2, M)
-    elif step <> None:
+    elif step is not None:
         N = M.shape[0]
         x1 = np.linspace(0, N-1, num=N)
         x2 = np.arange(0, N-1, step)
@@ -769,7 +769,7 @@ def collinearNPointsStylusFun(P, args):
 
     # Difference between extreme markers
     existingMarkerIdxs = []
-    for i in xrange(0, len(markers)):
+    for i in range(0, len(markers)):
         if markers[i] in P:
             existingMarkerIdxs.append(i)
 
@@ -788,7 +788,7 @@ def collinearNPointsStylusFun(P, args):
     X = np.zeros((Nf,0))
     Y = np.zeros((Nf,0))
     Z = np.zeros((Nf,0))
-    for i in xrange(0, len(markers)):
+    for i in range(0, len(markers)):
         if i not in existingMarkerIdxs:
             continue
         tip = P[markers[i]] + dist[i] * N
@@ -924,7 +924,7 @@ def nonCollinear5PointsStylusFun(P, args, verbose=True):
         u1 = np.zeros((Nf,3))
         u2 = np.zeros((Nf,3))
         v = np.zeros((Nf,3))
-        for i in xrange(Nf):
+        for i in range(Nf):
             
             # Perform trilateration with markers P1-P3-P5
             _u1, _v1 = trilateration(np.array([P1[i,:], P3[i,:], P5[i,:]]), np.array([r1, r3, r5]))
@@ -1985,7 +1985,7 @@ def getJointAngles(R1, R2, R2anglesFun=R2zxy, funInput='jointR', **kwargs):
 def correctGimbal(angle):
     angle2 = angle[:]
     th = 1.5 * np.pi
-    for i in xrange(1, angle2.shape[0]):
+    for i in range(1, angle2.shape[0]):
         if (angle2[i] - angle2[i-1]) >= th:
             angle2[i:] -= 2 * np.pi
         elif (angle2[i] - angle2[i-1]) <= -th:

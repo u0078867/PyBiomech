@@ -5,7 +5,8 @@ Created on Fri Jan 06 10:35:47 2017
 @author: u0078867
 """
 
-import vtk, vtkh
+import vtk
+from . import vtkh
 
 
   

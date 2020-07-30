@@ -140,7 +140,7 @@ def exportScene(scene, filePrefix, ext='x3d', names=[]):
         actors.InitTraversal()
         mb = vtk.vtkMultiBlockDataSet()
         mb.SetNumberOfBlocks(actors.GetNumberOfItems())
-        for i in xrange(actors.GetNumberOfItems()):
+        for i in range(actors.GetNumberOfItems()):
             actor = actors.GetNextItem()
             block = actor.GetMapper().GetInput()
             mb.GetMetaData(i).Set(vtk.vtkCompositeDataSet.NAME(), names[i])

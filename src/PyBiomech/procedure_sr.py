@@ -6,7 +6,7 @@
 
 import numpy as np
 
-import fio, mplh, kine, vtkh, ligaments as liga, contacts, spine
+from . import fio, mplh, kine, vtkh, ligaments as liga, contacts, spine
 
 import re
 from itertools import groupby

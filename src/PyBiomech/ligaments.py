@@ -6,7 +6,7 @@ Created on Fri Jan 06 10:35:47 2017
 """
 
 import vtk
-from vtkh import *
+from .vtkh import *
 import numpy as np
 from scipy.optimize import minimize as spminimize
 from scipy.interpolate import RegularGridInterpolator
@@ -80,9 +80,9 @@ def ligamentPathMarai2004(pIns, vtkBoneA, vtkBoneB, Ns=10, iterInitP=[], iterArg
     p22 = np.dot(Rt, np.append(p2, 1))[:3]
     if Ns is None:
         iterInitP2 = np.dot(Rt, np.vstack((iterInitP.T, np.ones((1, iterInitP.shape[0]))))).T[:,:3]
-        print p12
-        print p22
-        print iterInitP2
+        print(p12)
+        print(p22)
+        print(iterInitP2)
     
     # Create points
     if Ns is not None:
@@ -96,7 +96,7 @@ def ligamentPathMarai2004(pIns, vtkBoneA, vtkBoneB, Ns=10, iterInitP=[], iterArg
         p = iterInitP2.copy()[::-1,:]
         Ns = p.shape[0] - 1
         if equalizeInitIterP:
-            print p
+            print(p)
 #            p = p[::-1,:]
             xuf = RegularGridInterpolator((p[:,2],), p[:,0], bounds_error=False, fill_value=None)
             yuf = RegularGridInterpolator((p[:,2],), p[:,1], bounds_error=False, fill_value=None)
@@ -110,7 +110,7 @@ def ligamentPathMarai2004(pIns, vtkBoneA, vtkBoneB, Ns=10, iterInitP=[], iterArg
                 ps2 = (x, y, z)
                 p[l,:] = ps2
 #            p = p[::-1,:]
-            print p
+            print(p)
     
     points = vtk.vtkPoints()
     for ps2 in p:
@@ -162,7 +162,7 @@ def ligamentPathMarai2004(pIns, vtkBoneA, vtkBoneB, Ns=10, iterInitP=[], iterArg
             return d
             
         cons = []
-        for ip in xrange(1, Ns):
+        for ip in range(1, Ns):
             cons.append({'type': 'ineq', 'fun': consFun, 'args': (ip, 'boneB')})
             cons.append({'type': 'ineq', 'fun': consFun, 'args': (ip, 'boneA')})
             
@@ -172,7 +172,7 @@ def ligamentPathMarai2004(pIns, vtkBoneA, vtkBoneB, Ns=10, iterInitP=[], iterArg
             jaco = np.zeros((Nv, 2))
             dx = pp[1:,0:2] - pp[:-1,0:2]
             dist = np.linalg.norm(dx, axis=1)
-            for i in xrange(0, Nv):
+            for i in range(0, Nv):
                 jaco[i,:] = (dx[i,:] / dist[i]) - (dx[i+1,:] / dist[i+1])
             return jaco.ravel()
             
@@ -182,7 +182,7 @@ def ligamentPathMarai2004(pIns, vtkBoneA, vtkBoneB, Ns=10, iterInitP=[], iterArg
             jaco = np.zeros((Nv, 3))
             dx = pp[1:,:] - pp[:-1,:]
             dist = np.linalg.norm(dx, axis=1)
-            for i in xrange(0, Nv):
+            for i in range(0, Nv):
                 jaco[i,:] = (dx[i,:] / dist[i]) - (dx[i+1,:] / dist[i+1])
             return jaco[:,:2].ravel()
         

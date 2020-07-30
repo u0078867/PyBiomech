@@ -4,7 +4,7 @@
 
 """
 
-import vtkh
+from . import vtkh
 import numpy as np
 
 
