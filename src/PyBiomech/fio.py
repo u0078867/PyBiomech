@@ -123,7 +123,7 @@ def writeC3D(fileName, data, copyFromFile=None):
     if copyFromFile is not None:
         # Open C3D pointer
         reader = btk.btkAcquisitionFileReader()
-        reader.SetFilename(copyFromFile)
+        reader.SetFilename(str(copyFromFile))
         reader.Update()
         acq = reader.GetOutput()
         if 'markers' in data:
@@ -155,7 +155,7 @@ def writeC3D(fileName, data, copyFromFile=None):
     # Write to C3D
     writer = btk.btkAcquisitionFileWriter()
     writer.SetInput(acq)
-    writer.SetFilename(fileName)
+    writer.SetFilename(str(fileName))
     writer.Update()
     
 
